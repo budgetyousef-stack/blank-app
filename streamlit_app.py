@@ -133,7 +133,6 @@ st.markdown("""
     .footer { text-align: center; color: #334155; font-size: 0.75rem; margin-top: 32px; padding-bottom: 24px; }
 
     /* Streamlit overrides */
-    .stSelectbox label, .stButton > button { font-family: 'Cairo', sans-serif !important; }
     .stButton > button {
         width: 100%;
         background: linear-gradient(135deg, #0ea5e9, #38BDF8) !important;
@@ -146,34 +145,18 @@ st.markdown("""
         font-family: 'Cairo', sans-serif !important;
     }
     .stButton > button:hover { opacity: 0.9 !important; }
-    div[data-testid="stSelectbox"] > div > div {
-        background-color: #0F172A !important;
-        border-color: #334155 !important;
-        border-radius: 12px !important;
-        color: #F1F5F9 !important;
-        font-family: 'Cairo', sans-serif !important;
-        font-weight: 700 !important;
-    }
     </style>
 """, unsafe_allow_html=True)
 
 # ─── Constants ───────────────────────────────────────────────────────────────
 
-LOCATIONS = {
-    "الـحـمـراء (الجبيل)": {"lat": 27.01, "lon": 49.66, "en": "Al-Hamra"},
-    "الـعـقـيـر":           {"lat": 25.64, "lon": 50.22, "en": "Al-Uqair"},
-    "زبـنـة":               {"lat": 26.85, "lon": 49.80, "en": "Zibna"},
-}
-
 DAYS_AR = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"]
+MAP_START_LAT = 26.85
+MAP_START_LON = 49.80
 
 # ─── Fish Activity Model ──────────────────────────────────────────────────────
 
 def fish_activity_score(wind: float, wave: float, temp: float) -> dict:
-    """
-    Score-based fish activity prediction.
-    Returns level (low/medium/high), score (0-100), color, label, advice, factors.
-    """
     score = 100
 
     # Wind penalty
@@ -230,49 +213,13 @@ def fish_activity_score(wind: float, wave: float, temp: float) -> dict:
         color  = "#EF4444"
         advice = "ظروف صعبة — الأسماك في الأعماق والبحر غير مناسب. يُفضل الانتظار."
 
-    bar_pct = score
-
     return {
         "level": level, "label": label, "color": color,
-        "score": score, "bar_pct": bar_pct, "advice": advice,
+        "score": score, "bar_pct": score, "advice": advice,
         "wind_status": wind_status, "wind_label": wind_label,
         "wave_status": wave_status, "wave_label": wave_label,
         "temp_status": temp_status, "temp_label": temp_label,
     }
-
-# ─── Map Builder ─────────────────────────────────────────────────────────────
-
-def build_folium_map(lat: float, lon: float, site_name: str) -> folium.Map:
-    m = folium.Map(
-        location=[lat, lon],
-        zoom_start=10,
-        tiles="CartoDB dark_matter",
-        width="100%",
-    )
-    folium.Marker(
-        location=[lat, lon],
-        popup=folium.Popup(
-            f"<div style='font-family:Cairo,sans-serif;direction:rtl;text-align:right;"
-            f"font-size:13px;'>"
-            f"<b style='color:#38BDF8'>{site_name}</b><br>"
-            f"<span style='color:#64748b;font-size:11px'>{lat:.2f}°N, {lon:.2f}°E</span></div>",
-            max_width=200
-        ),
-        tooltip=site_name,
-        icon=folium.Icon(color="blue", icon="anchor", prefix="fa"),
-    ).add_to(m)
-
-    folium.Circle(
-        location=[lat, lon],
-        radius=3500,
-        color="#38BDF8",
-        fill=True,
-        fill_color="#38BDF8",
-        fill_opacity=0.08,
-        weight=2,
-    ).add_to(m)
-
-    return m
 
 # ─── API Fetch ────────────────────────────────────────────────────────────────
 
@@ -301,7 +248,7 @@ def fetch_weather(lat: float, lon: float):
 # ─── Header ───────────────────────────────────────────────────────────────────
 
 st.markdown('<h1 class="main-title">🌊 MARINE TRACKER</h1>', unsafe_allow_html=True)
-st.markdown('<p class="sub-title">المرشد البحري لرحلات الصيد</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-title">المرشد البحري الذكي لرحلات الصيد</p>', unsafe_allow_html=True)
 st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
 
 # ─── Layout: two columns ──────────────────────────────────────────────────────
@@ -309,32 +256,59 @@ st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
 col_left, col_right = st.columns([1, 1.3], gap="large")
 
 with col_left:
-    # Location selector
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown('<div class="card-title">📍 اختر موقع الصيد</div>', unsafe_allow_html=True)
-    site = st.selectbox(
-        label="موقع الصيد",
-        options=list(LOCATIONS.keys()),
-        label_visibility="collapsed"
+    st.markdown('<div class="card-title">🗺️ خريطة الصيد التفاعلية</div>', unsafe_allow_html=True)
+    st.info("💡 قم بتكبير الخريطة بيدك واضغط على أي موقع في البحر لوضع الدبوس وتحليله فوراً.")
+    
+    # بناء الخريطة الحرة المستقرة
+    m = folium.Map(
+        location=[MAP_START_LAT, MAP_START_LON],
+        zoom_start=9,
+        tiles="CartoDB dark_matter",
+        width="100%"
     )
-    analyse = st.button("تحليل الأجواء والمد والجزر 📊")
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # Always show map
-    loc = LOCATIONS[site]
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown('<div class="card-title">🗺️ موقع الصيد على الخريطة</div>', unsafe_allow_html=True)
-    fmap = build_folium_map(loc["lat"], loc["lon"], site)
-    st_folium(fmap, height=300, use_container_width=True, returned_objects=[])
+    m.add_child(folium.LatLngPopup())
+    
+    # التحقق من الموقع المختار ووضع الدبوس والمربع الشفاف حوله
+    map_data = st_folium(m, height=450, use_container_width=True, key="marine_map")
+    
+    clicked_lat = None
+    clicked_lon = None
+    
+    if map_data and map_data.get("last_clicked"):
+        clicked_lat = map_data["last_clicked"]["lat"]
+        clicked_lon = map_data["last_clicked"]["lng"]
+        
+        # إعادة بناء الخريطة لإظهار الدبوس والمربع فوراً عند النقر
+        m2 = folium.Map(location=[clicked_lat, clicked_lon], zoom_start=10, tiles="CartoDB dark_matter")
+        
+        # وضع الدبوس (Pin)
+        folium.Marker(
+            location=[clicked_lat, clicked_lon],
+            icon=folium.Icon(color="blue", icon="anchor", prefix="fa")
+        ).add_to(m2)
+        
+        # وضع نطاق مربع التحديد الشفاف (Circle Area)
+        folium.Circle(
+            location=[clicked_lat, clicked_lon],
+            radius=4000,
+            color="#38BDF8",
+            fill=True,
+            fill_color="#38BDF8",
+            fill_opacity=0.12,
+            weight=2
+        ).add_to(m2)
+        
+        # تحديث العرض بالدبوس الجديد
+        st.experimental_rerun if not st.session_state.get("data_loaded") else None
+        
     st.markdown('</div>', unsafe_allow_html=True)
 
 with col_right:
-    if analyse or st.session_state.get("data_loaded"):
+    if clicked_lat and clicked_lon:
         try:
-            with st.spinner("جاري جلب البيانات..."):
-                w_res, m_res = fetch_weather(loc["lat"], loc["lon"])
-                st.session_state["data_loaded"] = True
-                st.session_state["fetched_site"] = site
+            with st.spinner("جاري التقاط الإحداثيات وتحليل الطقس البحري..."):
+                w_res, m_res = fetch_weather(clicked_lat, clicked_lon)
 
             hourly_w = w_res["hourly"]
             hourly_m = m_res["hourly"]
@@ -344,7 +318,6 @@ with col_right:
             wind_now = hourly_w["windspeed_10m"][current_hour]
             wave_now = hourly_m["wave_height"][current_hour]
 
-            # Best hours
             best_hours = []
             for i in range(current_hour, min(current_hour + 12, 24)):
                 if hourly_w["windspeed_10m"][i] <= 15 and hourly_m["wave_height"][i] <= 0.6:
@@ -352,21 +325,20 @@ with col_right:
                     period = "ص" if i < 12 else "م"
                     best_hours.append(f"{h}:00 {period}")
 
-            # Status
             if wind_now < 14 and wave_now < 0.5:
                 status, badge, advice_text = "excellent", "badge-excellent", (
-                    "الوضع ممتاز جداً: بحر سياح، الموج ساكن والهوا ركود. "
+                    "الوضع ممتاز جداً: بحر سياح، الموج ساكن والهوا ركود في هذه الإحداثية. "
                     "أنسب وقت للمحادق وصيد السيف! 🎣"
                 )
             elif wind_now < 20 and wave_now < 0.8:
                 status, badge, advice_text = "good", "badge-good", (
-                    "الوضع جيد: جلب مناسب، فيه شوية يوش (حركة موج خفيفة) "
-                    "لكن الصيد مقدور عليه. 👍"
+                    "الوضع جيد: جلب مناسب، حركة موج خفيفة (يوش) في الموقع "
+                    "لكن الصيد مقدور عليه وبإذن الله توفق. 👍"
                 )
             else:
                 status, badge, advice_text = "bad", "badge-bad", (
-                    "الوضع صعب: موج عالي وهوا شديد. "
-                    "يُنصح بعدم الخروج لسلامتك. ⛔"
+                    "الوضع صعب: ضربة بحر في هذه المنطقة، الموج عالي والهوا تارس. "
+                    "يُنصح بعدم النزول لسلامتك. ⛔"
                 )
 
             status_ar = {"excellent": "ممتاز", "good": "جيد", "bad": "محظور"}
@@ -375,9 +347,14 @@ with col_right:
             st.markdown('<div class="card">', unsafe_allow_html=True)
             st.markdown(
                 f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'
-                f'<div class="card-title" style="margin-bottom:0">الأحوال الحالية</div>'
+                f'<div class="card-title" style="margin-bottom:0">📊 تقرير الإحداثية الحالية</div>'
                 f'<span class="{badge}">{status_ar[status]}</span>'
                 f'</div>',
+                unsafe_allow_html=True
+            )
+            st.markdown(
+                f'<div style="color:#64748B; font-size:0.85rem; margin-top:-10px; margin-bottom:14px;">'
+                f'Lat: {clicked_lat:.4f} | Lon: {clicked_lon:.4f}</div>',
                 unsafe_allow_html=True
             )
             st.markdown(
@@ -394,15 +371,13 @@ with col_right:
                 f'</div>',
                 unsafe_allow_html=True
             )
-            st.markdown(
-                f'<p class="advice-{status}">{advice_text}</p>',
-                unsafe_allow_html=True
-            )
+            st.markdown(f'<p class="advice-{status}">{advice_text}</p>', unsafe_allow_html=True)
+            
             if best_hours:
                 chips = "".join(f'<span class="hour-chip">{h}</span>' for h in best_hours)
                 st.markdown(
                     f'<div style="border-top:1px solid #334155;padding-top:12px;margin-top:8px">'
-                    f'<div style="color:#94A3B8;font-size:0.82rem;margin-bottom:6px">أفضل ساعات الصيد اليوم:</div>'
+                    f'<div style="color:#94A3B8;font-size:0.82rem;margin-bottom:6px">أفضل ساعات الصيد اليوم في هذا الموقع:</div>'
                     f'{chips}</div>',
                     unsafe_allow_html=True
                 )
@@ -411,12 +386,11 @@ with col_right:
             # ── Fish Activity Prediction card ─────────────────────────────
             act = fish_activity_score(wind_now, wave_now, temp_now)
             st.markdown('<div class="card">', unsafe_allow_html=True)
-            st.markdown('<div class="card-title">🐠 توقع نشاط الأسماك</div>', unsafe_allow_html=True)
+            st.markdown('<div class="card-title">🐠 توقع نشاط الأسماك وحالة الضرب</div>', unsafe_allow_html=True)
             st.markdown(
                 f'<div style="text-align:center;padding:12px;background:rgba(255,255,255,0.04);'
                 f'border-radius:12px;border:2px solid {act["color"]};margin-bottom:12px">'
                 f'<div style="font-size:1.4rem;font-weight:800;color:{act["color"]}">{act["label"]}</div>'
-                f'<div style="font-size:0.72rem;color:#64748B;margin-top:2px">مستوى النشاط</div>'
                 f'</div>',
                 unsafe_allow_html=True
             )
@@ -427,7 +401,7 @@ with col_right:
                 f'background:linear-gradient(90deg,#10B981,{act["color"]})"></div>'
                 f'</div>'
                 f'<div style="text-align:left;font-size:0.7rem;color:#64748B;margin-bottom:10px">'
-                f'النتيجة: {act["score"]}/100</div>',
+                f'مؤشر النشاط: {act["score"]}/100</div>',
                 unsafe_allow_html=True
             )
             st.markdown(
@@ -471,47 +445,20 @@ with col_right:
             }).set_index("اليوم")
 
             st.markdown('<div class="card">', unsafe_allow_html=True)
-            st.markdown(
-                '<div class="card-title">📈 توقعات الأسبوع — الرياح والأمواج والحرارة</div>',
-                unsafe_allow_html=True
-            )
-            st.line_chart(
-                chart_df,
-                height=230,
-                use_container_width=True,
-                color=["#38BDF8", "#10B981", "#F59E0B"],
-            )
-
-            # Day summary chips
-            day_cards_html = '<div class="day-cards">'
-            for i, (label, w, wv) in enumerate(zip(days_labels, daily_wind, daily_wave)):
-                act_day = fish_activity_score(w, wv, daily_temp[i])
-                arrow = "⬆" if act_day["level"] == "high" else ("➡" if act_day["level"] == "medium" else "⬇")
-                day_cards_html += (
-                    f'<div class="day-card">'
-                    f'<div class="day-card-name">{label}</div>'
-                    f'<div style="color:{act_day["color"]};font-size:1rem">{arrow}</div>'
-                    f'<div style="color:#64748B;margin-top:4px">{round(w)}كم</div>'
-                    f'</div>'
-                )
-            day_cards_html += '</div>'
-            st.markdown(day_cards_html, unsafe_allow_html=True)
+            st.markdown('<div class="card-title">📈 توقعات السبعة أيام القادمة لهذه المنطقة</div>', unsafe_allow_html=True)
+            st.line_chart(chart_df, height=210, use_container_width=True, color=["#38BDF8", "#10B981", "#F59E0B"])
             st.markdown('</div>', unsafe_allow_html=True)
 
         except Exception as e:
-            st.error(f"تعذّر جلب البيانات. تحقق من الاتصال بالإنترنت وحاول مجدداً.\n\n{e}")
-
+            st.error("حدث خطأ أثناء سحب بيانات الطقس البحري. تأكد من تحديد نقطة داخل نطاق البحر.")
     else:
         st.markdown(
-            '<div class="card" style="text-align:center;padding:48px 24px">'
-            '<div style="font-size:3rem;margin-bottom:12px">🌊</div>'
-            '<div style="color:#64748B;font-size:1rem;font-family:Cairo,sans-serif">'
-            'اختر موقع الصيد واضغط زر التحليل لعرض التوقعات'
+            '<div class="card" style="text-align:center;padding:78px 24px">'
+            '<div style="font-size:3.5rem;margin-bottom:12px">⚓</div>'
+            '<div style="color:#64748B;font-size:1.05rem;font-family:Cairo,sans-serif">'
+            'يرجى الضغط على أي مكان في البحر على الخريطة لعرض التقارير والتحليلات مباشرة'
             '</div></div>',
             unsafe_allow_html=True
         )
 
-st.markdown(
-    '<div class="footer">Marine Tracker — بيانات من Open-Meteo API</div>',
-    unsafe_allow_html=True
-)
+st.markdown('<div class="footer">Marine Tracker PRO — بيانات الطقس متصلة بـ Open-Meteo API</div>', unsafe_allow_html=True)
