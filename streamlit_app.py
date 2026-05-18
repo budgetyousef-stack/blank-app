@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 # ─── إعدادات الصفحة والهوية الجديدة ───────────────────────────────────────────
 st.set_page_config(
     page_title="Marso | مَارسُو",
-    # 💡 
+    # 💡 تم تغيير الأيقونة العلوية إلى سنارة
     page_icon="🎣",
     layout="centered",
     initial_sidebar_state="collapsed"
