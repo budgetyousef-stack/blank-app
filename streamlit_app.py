@@ -4,6 +4,9 @@ import folium
 import pandas as pd
 import math
 import altair as alt
+import json
+import os
+import time
 from streamlit_folium import st_folium
 from datetime import datetime, timedelta
 
@@ -75,15 +78,13 @@ iframe[title="st_folium.frontend"] { border-radius: 14px !important; border: 1px
 .sol-chip-label { font-size: 0.65rem; color: #64748B; margin-top: 3px; }
 .tide-details-box { background: rgba(30,41,59,0.4); border: 1px solid rgba(255,255,255,0.05); padding: 14px; border-radius: 14px; margin-top: -10px; margin-bottom: 16px; }
 
-.source-badge { display:inline-block; padding: 4px 10px; border-radius: 12px; font-size: 0.7rem; font-weight: 800; margin-bottom: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); }
-.source-live { color: #10B981; }
-.source-math { color: #F59E0B; }
+.cache-status-badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 0.75rem; font-weight: 800; margin-bottom: 12px; background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.2); color: #38BDF8; }
 
 @media (max-width: 480px) { .block-container { padding: 0.6rem 0.6rem 2rem 0.6rem !important; } .card { padding: 14px 12px; border-radius: 14px; } .metric-row { gap: 6px; } }
 </style>
 """, unsafe_allow_html=True)
 
-# ─── ثوابت ودوال مساعدة ───────────────────────────────────────────────────────
+# ─── ثوابت ودوال ──────────────────────────────────────────────────────────────
 DAYS_AR   = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"]
 MONTHS_AR = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"]
 
@@ -110,37 +111,12 @@ def fish_activity_score(wind: float, wave: float, temp: float, swell: float = 0.
     elif score >= 35: return {"label": "نشاط متوسط 🐟", "color": "#F59E0B", "score": score, "advice": "ظروف مقبولة — الأسماك نشيطة جزئياً. الصيد ممكن مع بعض الصبر."}
     else: return {"label": "نشاط منخفض ⚠️", "color": "#EF4444", "score": score, "advice": "ظروف صعبة — البحر غير مناسب حالياً."}
 
-# ─── نظام المد والجزر المزدوج (Hybrid Tide System) ───────────────────────────
-# ضع مفتاح Stormglass الخاص بك هنا (إذا تركته فارغاً سيعمل الحساب الرياضي التلقائي)
-STORMGLASS_API_KEY = ""
+def _tide_amplitudes(lat: float, lon: float) -> dict:
+    if (23 <= lat <= 30) and (48 <= lon <= 57): return dict(M2=0.88, S2=0.26, K1=0.15, O1=0.09, base=1.05)
+    return dict(M2=0.60, S2=0.20, K1=0.18, O1=0.12, base=0.75)
 
-@st.cache_data(ttl=43200) # يتم حفظ البيانات لـ 12 ساعة لتوفير استهلاك المفتاح المجاني
-def fetch_real_tides(lat: float, lon: float, target_date: datetime, api_key: str):
-    if not api_key: return None
-    
-    start_ts = int(target_date.replace(hour=0, minute=0, second=0).timestamp())
-    end_ts = start_ts + (24 * 3600)
-    url = "https://api.stormglass.io/v2/tide/sea-level/point"
-    
-    try:
-        res = requests.get(url, params={"lat": lat, "lng": lon, "start": start_ts, "end": end_ts}, headers={"Authorization": api_key}, timeout=10).json()
-        if "data" in res and len(res["data"]) > 0:
-            heights = []
-            data_pts = res["data"]
-            for h in range(25):
-                target_h_ts = start_ts + (h * 3600)
-                # إيجاد أقرب قراءة لكل ساعة
-                closest = min(data_pts, key=lambda x: abs(datetime.fromisoformat(x['time']).timestamp() - target_h_ts))
-                heights.append(round(closest['sg'], 2))
-            return heights
-    except:
-        return None
-    return None
-
-def compute_math_tides(lat: float, lon: float, for_date: datetime) -> list:
-    if (23 <= lat <= 30) and (48 <= lon <= 57): amp = dict(M2=0.88, S2=0.26, K1=0.15, O1=0.09, base=1.05)
-    else: amp = dict(M2=0.60, S2=0.20, K1=0.18, O1=0.12, base=0.75)
-    
+def compute_tide_profile(lat: float, lon: float, for_date: datetime) -> list:
+    amp = _tide_amplitudes(lat, lon)
     t0 = (for_date.replace(hour=0, minute=0) - datetime(2000, 1, 1)).total_seconds() / 3600.0
     periods = dict(M2=12.4206, S2=12.0000, K1=23.9345, O1=25.8194)
     heights = []
@@ -149,14 +125,6 @@ def compute_math_tides(lat: float, lon: float, for_date: datetime) -> list:
         for name, p in periods.items(): level += amp[name] * math.cos(2.0 * math.pi * t / p - 0.5)
         heights.append(round(max(0.05, level), 2))
     return heights
-
-def get_tide_data(lat: float, lon: float, date: datetime) -> tuple:
-    # يحاول جلب البيانات الحقيقية 99% أولاً
-    real_data = fetch_real_tides(lat, lon, date, STORMGLASS_API_KEY)
-    if real_data and len(real_data) == 25:
-        return real_data, "LIVE"
-    # إذا فشل أو لم يوجد مفتاح، يستخدم الحساب الرياضي 70% كخطة بديلة
-    return compute_math_tides(lat, lon, date), "MATH"
 
 def find_tide_events(heights: list) -> dict:
     highs, lows = [], []
@@ -194,15 +162,45 @@ def compute_solunar_times(moon_age: float, lon: float) -> dict:
         "minor": [f"{fmt_h(moon_transit_local+5.2)} — {fmt_h(moon_transit_local+6.2)}", f"{fmt_h(moon_transit_local+17.6)} — {fmt_h(moon_transit_local+18.6)}"]
     }
 
-@st.cache_data(ttl=1800)
-def fetch_weather(lat: float, lon: float):
+def fetch_weather_live(lat: float, lon: float):
     w_url, m_url = "https://api.open-meteo.com/v1/forecast", "https://marine-api.open-meteo.com/v1/marine"
-    w_params = {"latitude": lat, "longitude": lon, "hourly": "temperature_2m,apparent_temperature,windspeed_10m,winddirection_10m", "timezone": "Asia/Riyadh"}
-    m_params = {"latitude": lat, "longitude": lon, "hourly": "wave_height,wave_period,swell_wave_height,sea_surface_temperature", "timezone": "Asia/Riyadh"}
-    try: return requests.get(w_url, params=w_params).json(), requests.get(m_url, params=m_params).json()
-    except: return None, None
+    w_params = {"latitude": lat, "longitude": lon, "hourly": "temperature_2m,apparent_temperature,windspeed_10m,winddirection_10m", "forecast_days": 7, "timezone": "Asia/Riyadh"}
+    m_params = {"latitude": lat, "longitude": lon, "hourly": "wave_height,wave_period,swell_wave_height,sea_surface_temperature", "forecast_days": 7, "timezone": "Asia/Riyadh"}
+    try: 
+        w_res = requests.get(w_url, params=w_params, timeout=10).json()
+        m_res = requests.get(m_url, params=m_params, timeout=10).json()
+        return w_res, m_res
+    except: 
+        return None, None
 
-@st.cache_data(ttl=3600)
+def get_cached_marine_data(lat: float, lon: float):
+    cache_file = "marine_data_cache.json"
+    current_time = time.time()
+    one_week_seconds = 7 * 24 * 3600
+    loc_key = f"{round(lat, 2)},{round(lon, 2)}"
+    
+    cache_data = {}
+    if os.path.exists(cache_file):
+        try:
+            with open(cache_file, "r", encoding="utf-8") as f: cache_data = json.load(f)
+        except: cache_data = {}
+            
+    if loc_key in cache_data:
+        saved_item = cache_data[loc_key]
+        if current_time - saved_item.get("timestamp", 0) < one_week_seconds:
+            return saved_item["w_res"], saved_item["m_res"], "LOCAL_CACHE"
+            
+    w_res, m_res = fetch_weather_live(lat, lon)
+    if w_res and "hourly" in w_res and m_res and "hourly" in m_res:
+        cache_data[loc_key] = {"timestamp": current_time, "w_res": w_res, "m_res": m_res}
+        try:
+            with open(cache_file, "w", encoding="utf-8") as f: json.dump(cache_data, f, ensure_ascii=False, indent=4)
+        except: pass
+        return w_res, m_res, "LIVE_UPDATED"
+        
+    return None, None, "ERROR"
+
+@st.cache_data(ttl=86400)
 def get_location_name(lat: float, lon: float) -> str:
     try:
         res = requests.get(f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json&accept-language=ar", headers={"User-Agent": "MarineTrackerPRO/2.0"}).json()
@@ -227,7 +225,7 @@ _day_options = [_day_option_label(i) for i in range(7)]
 _selected_day = st.segmented_control(label="اختر اليوم", options=_day_options, default=_day_options[0], label_visibility="collapsed")
 day_offset = _day_options.index(_selected_day) if _selected_day in _day_options else 0
 
-st.markdown('<div class="map-section-label">🗺️ خريطة قوقل مابس التفاعلية</div>', unsafe_allow_html=True)
+st.markdown('<div class="map-section-label">🗺️ خريطة قوقل مابس التفاعلية (انقر لاختيار مكان الصيد الجديد)</div>', unsafe_allow_html=True)
 m = folium.Map(location=[flat, flon], zoom_start=11, tiles="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", attr="Google Maps Satellite Hybrid")
 folium.Marker(location=[flat, flon], icon=folium.Icon(color="blue", icon="anchor", prefix="fa")).add_to(m)
 
@@ -238,42 +236,68 @@ if map_data and map_data.get("last_clicked"):
         st.session_state["coords"] = new_coords
         st.rerun()
 
-w_res, m_res = fetch_weather(flat, flon)
-if w_res and "hourly" in w_res and m_res and "hourly" in m_res:
-    hw, hm = w_res["hourly"], m_res["hourly"]
-    curr_h = datetime.now().hour
-    max_idx = min(len(hw.get("temperature_2m", [])) - 1, len(hm.get("wave_height", [])) - 1)
-    data_idx = min((day_offset * 24) + curr_h, max_idx) if max_idx >= 0 else 0
+w_res, m_res, source_info = get_cached_marine_data(flat, flon)
 
-    t_now = get_safe(hw.get("temperature_2m", []), data_idx)
-    wind_now = get_safe(hw.get("windspeed_10m", []), data_idx)
-    wind_dir = get_safe(hw.get("winddirection_10m", []), data_idx)
-    wave_now = get_safe(hm.get("wave_height", []), data_idx)
-    swell_now = get_safe(hm.get("swell_wave_height", []), data_idx)
-    sst = get_safe(hm.get("sea_surface_temperature", []), data_idx)
+if w_res and m_res:
+    hw, hm = w_res["hourly"], m_res["hourly"]
+    max_idx = min(len(hw.get("temperature_2m", [])) - 1, len(hm.get("wave_height", [])) - 1)
+    
+    start_idx = day_offset * 24
+    end_idx = min(start_idx + 24, max_idx + 1)
+    
+    # 💡 النظام الذكي لتغيير العناوين والمسميات بناءً على اليوم المختار
+    if day_offset == 0:
+        curr_h = datetime.now().hour
+        data_idx = min((day_offset * 24) + curr_h, max_idx) if max_idx >= 0 else 0
+        
+        t_val = get_safe(hw.get("temperature_2m", []), data_idx)
+        wind_val = get_safe(hw.get("windspeed_10m", []), data_idx)
+        wind_dir = get_safe(hw.get("winddirection_10m", []), data_idx)
+        wave_val = get_safe(hm.get("wave_height", []), data_idx)
+        swell_val = get_safe(hm.get("swell_wave_height", []), data_idx)
+        sst_val = get_safe(hm.get("sea_surface_temperature", []), data_idx)
+        
+        card_title = "📊 القياسات الحيوية (الآن)"
+        t_label, w_label, wv_label, sst_label = "الحرارة الحالية", "الرياح اللحظية", "الموج الحالي", "حرارة البحر"
+    else:
+        t_vals = [get_safe(hw.get("temperature_2m", []), i) for i in range(start_idx, end_idx)]
+        wind_vals = [get_safe(hw.get("windspeed_10m", []), i) for i in range(start_idx, end_idx)]
+        wave_vals = [get_safe(hm.get("wave_height", []), i) for i in range(start_idx, end_idx)]
+        swell_vals = [get_safe(hm.get("swell_wave_height", []), i) for i in range(start_idx, end_idx)]
+        sst_vals = [get_safe(hm.get("sea_surface_temperature", []), i) for i in range(start_idx, end_idx)]
+        
+        t_val = max(t_vals) if t_vals else 0.0
+        wind_val = max(wind_vals) if wind_vals else 0.0
+        wave_val = max(wave_vals) if wave_vals else 0.0
+        swell_val = max(swell_vals) if swell_vals else 0.0
+        sst_val = (sum(sst_vals) / len(sst_vals)) if sst_vals else 0.0
+        wind_dir = get_safe(hw.get("winddirection_10m", []), start_idx + 12)
+        
+        card_title = f"📊 التوقعات العظمى لليوم المختار"
+        t_label, w_label, wv_label, sst_label = "أعلى حرارة", "أقصى سرعة رياح", "أعلى موج", "متوسط حرارة البحر"
 
     arrow_style = f"transform: rotate({wind_dir}deg); display: inline-block; font-size: 1.1rem; color: #38BDF8;"
-    if wind_now < 14 and wave_now < 0.5: status, badge, adv = "excellent", "badge-excellent", "الوضع ممتاز: بحر هادئ تماماً وحركة مريحة للصيد."
-    elif wind_now < 22 and wave_now < 0.9: status, badge, adv = "good", "badge-good", "الوضع جيد: بحر خفيف ومناسب للمحادق الساحلية مع أخذ الحيطة."
+    if wind_val < 14 and wave_val < 0.5: status, badge, adv = "excellent", "badge-excellent", "الوضع ممتاز: بحر هادئ تماماً وحركة مريحة للصيد."
+    elif wind_val < 22 and wave_val < 0.9: status, badge, adv = "good", "badge-good", "الوضع جيد: بحر خفيف ومناسب للمحادق الساحلية مع أخذ الحيطة."
     else: status, badge, adv = "bad", "badge-bad", "الوضع محظور: رياح نشطة وموج عالي، يفضل تأجيل الكشتة البحرية."
 
     st.markdown(f"""
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-        <div class="card-title" style="margin-bottom:0">📊 القياسات الحيوية اللحظية</div>
+        <div class="card-title" style="margin-bottom:0">{card_title}</div>
         <span class="{badge}">جو {_selected_day.split()[0]}</span>
       </div>
       <div class="metric-row">
-        <div class="metric-box"><div class="metric-value">{t_now:.0f}°م</div><div class="metric-label">الحرارة الحالية</div></div>
-        <div class="metric-box"><div class="metric-value">{wind_now:.0f} كم/س</div><div class="metric-label">الرياح <span style="{arrow_style}">↑</span></div></div>
-        <div class="metric-box"><div class="metric-value">{wave_now:.1f} م</div><div class="metric-label">ارتفاع الموج</div></div>
-        <div class="metric-box"><div class="metric-value">{sst:.1f}°م</div><div class="metric-label">حرارة البحر</div></div>
+        <div class="metric-box"><div class="metric-value">{t_val:.0f}°م</div><div class="metric-label">{t_label}</div></div>
+        <div class="metric-box"><div class="metric-value">{wind_val:.0f} كم/س</div><div class="metric-label">{w_label} <span style="{arrow_style}">↑</span></div></div>
+        <div class="metric-box"><div class="metric-value">{wave_val:.1f} م</div><div class="metric-label">{wv_label}</div></div>
+        <div class="metric-box"><div class="metric-value">{sst_val:.1f}°م</div><div class="metric-label">{sst_label}</div></div>
       </div>
       <p class="advice-{status}">💡 {adv}</p>
     </div>
     """, unsafe_allow_html=True)
 
-    act = fish_activity_score(wind_now, wave_now, t_now, swell_now)
+    act = fish_activity_score(wind_val, wave_val, t_val, swell_val)
     score, color = act["score"], act["color"]
     radius = 68; circ = 2 * math.pi * radius; filled = circ * score / 100
     stars_html = "★" * int(round(score / 20)) + "☆" * (5 - int(round(score / 20)))
@@ -300,10 +324,10 @@ if w_res and "hourly" in w_res and m_res and "hourly" in m_res:
     </div>
     """, unsafe_allow_html=True)
 
-    # ─── 📉 منحنى المد والجزر (النظام المزدوج الجديد) ───
+    # ─── 📉 منحنى المد والجزر (ALTAIR) ───
     try:
         target_date = datetime.now() + timedelta(days=day_offset)
-        tide_heights, source_type = get_tide_data(flat, flon, target_date)
+        tide_heights = compute_tide_profile(flat, flon, target_date)
         events = find_tide_events(tide_heights)
 
         labels_12h = []
@@ -332,13 +356,7 @@ if w_res and "hourly" in w_res and m_res and "hourly" in m_res:
             tooltip=[alt.Tooltip('label:N', title='الوقت'), alt.Tooltip('height:Q', title='الارتفاع (م)')]
         ).properties(height=200).configure_view(strokeWidth=0)
 
-        # عرض مصدر البيانات للمستخدم لإعطاء طابع احترافي
-        if source_type == "LIVE":
-            st.markdown('<div class="source-badge"><span class="source-live">🟢 متصل:</span> بيانات محطات المد والجزر المباشرة (عالية الدقة)</div>', unsafe_allow_html=True)
-        else:
-            st.markdown('<div class="source-badge"><span class="source-math">🟠 وضع عدم الاتصال:</span> حساب توافقي تقريبي فلكي (دقة متوسطة)</div>', unsafe_allow_html=True)
-
-        st.markdown('<div class="map-section-label" style="margin-top:2px;">📉 حركة المد والجزر السلسة (نظام 12 ساعة)</div>', unsafe_allow_html=True)
+        st.markdown('<div class="map-section-label" style="margin-top:12px;">📉 حركة المد والجزر السلسة (نظام 12 ساعة)</div>', unsafe_allow_html=True)
         st.altair_chart(chart, use_container_width=True)
 
         st.markdown('<div class="tide-details-box">', unsafe_allow_html=True)
