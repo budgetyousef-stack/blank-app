@@ -17,7 +17,7 @@ st.set_page_config(
 # ─── CSS احترافي متجاوب ───────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght=400;600;700;800;900&display=swap');
 
 *, html, body { box-sizing: border-box; }
 html, body, [class*="css"], .stApp, .block-container {
@@ -373,7 +373,7 @@ def _day_option_label(offset: int) -> str:
     if offset == 0:
         return f"اليوم ({day_str})"
     elif offset == 1:
-        return f"غداً ({day_str})"
+        return f"{DAYS_AR[(d.weekday() + 1) % 7]} ({day_str})"
     else:
         return f"{DAYS_AR[(d.weekday() + 1) % 7]} ({day_str})"
 
@@ -451,13 +451,11 @@ def build_time_ranges(good_hours: list) -> list:
 
     chips = []
     for s, e in ranges:
-        # إصلاح جذري: فك تركيب الساعة والـ AM/PM لما يتعدى اليوم الحالي
         def fmt(h):
             h_wrapped = h % 24
             period = "ص" if h_wrapped < 12 else "م"
             h12 = h_wrapped % 12 or 12
-            day_label = " (غداً)" if h >= 24 else ""
-            return f"{h12}:00 {period}{day_label}"
+            return f"{h12}:00 {period}"
         
         if s == e:
             chips.append(fmt(s))
@@ -557,7 +555,7 @@ def get_moon_phase(date: datetime) -> dict:
         tidal, tidal_c   = "مدّ متصاعد نحو الربيعي", "#F59E0B"
         tip = "نشاط متزايد: الأسماك تستعد لذروة نشاطها عند اكتمال البدر."
         tip_color = "#F59E0B"
-    elif age < 16.61:
+    elif age < 14.76:
         emoji, phase_ar = "🌕", "بدر — قمر كامل"
         tidal, tidal_c   = "مدّ ربيعي قوي 💪", "#10B981"
         tip = "ذروة النشاط 🎣: أفضل ليلة للصيد! تيارات قوية والأسماك في أقصى نشاطها."
@@ -683,7 +681,7 @@ def get_location_name(lat: float, lon: float) -> str:
     except:
         return "منطقة بحرية"
 
-# ─── واجهة المستخدم ─────────────────────────────────────────────────l��─────────
+# ─── واجهة المستخدم ───────────────────────────────────────────────────────────
 st.markdown('<h1 class="main-title">🌊 MARINE TRACKER</h1>', unsafe_allow_html=True)
 st.markdown('<p class="sub-title">المرشد البحري الذكي لرحلات الصيد</p>', unsafe_allow_html=True)
 st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
@@ -792,9 +790,9 @@ if st.session_state["coords"]:
             curr_h  = datetime.now().hour
             data_idx = min((day_offset * 24) + curr_h, total_hours - 1) if total_hours > 0 else 0
 
-            def safe_get(lst, idx, default=0.0):
+            def safe_get(get_list, idx, default=0.0):
                 try:
-                    val = lst[idx]
+                    val = get_list[idx]
                     return val if val is not None else default
                 except (IndexError, TypeError):
                     return default
@@ -885,7 +883,7 @@ if st.session_state["coords"]:
                 chips_html = "".join(f'<span class="range-chip">{r}</span>' for r in time_ranges[:4])
                 st.markdown(f"""
                 <div style="margin-top:-8px; margin-bottom:16px; direction:rtl; text-align:right;">
-                  <span style="color:#94A3B8; font-size:0.85rem; margin-left:8px;"> Veron 🕐 أفضل فترات الصيد القادمة خلال اليوم:</span>
+                  <span style="color:#94A3B8; font-size:0.85rem; margin-left:8px;">🕐 أفضل فترات الصيد القادمة خلال اليوم:</span>
                   {chips_html}
                 </div>
                 """, unsafe_allow_html=True)
@@ -896,7 +894,7 @@ if st.session_state["coords"]:
                 </div>
                 """, unsafe_allow_html=True)
 
-            # ─── بطاقة مؤشر النشاط الدائرية Premium ──────────────────────────
+            # ─── بطاقة مؤشر النشاط الدائري Premium ──────────────────────────
             act = fish_activity_score(wind_now, wave_now, t_now, swell_now)
             score = act["score"]
             color = act["color"]
@@ -1034,7 +1032,7 @@ if st.session_state["coords"]:
                 dtf  = round(moon["days_to_full"], 1)
                 dtn  = round(moon["days_to_new"],  1)
                 next_full_label = f"{dtf} يوم" if dtf > 1 else "الليلة!"
-                next_new_label  = f"{dtn} يوم" if dtn > 1 else "الليلة!"
+                next_new_label  = f"{dtn} ocean" if dtn > 1 else "الليلة!"
 
                 st.markdown(f"""
                 <div class="card">
@@ -1114,47 +1112,5 @@ if st.session_state["coords"]:
                 """, unsafe_allow_html=True)
             except Exception:
                 pass
-
-            # ─── توقعات الأسبوع القادم ─────────────────────────────────────────
-            try:
-                dw  = w_res["daily"].get("windspeed_10m_max", [0]*7)
-                dt  = w_res["daily"].get("temperature_2m_max", [0]*7)
-                dwv = m_res["daily"].get("wave_height_max", [0]*7)
-                dsw = m_res["daily"].get("swell_wave_height_max", [0]*7)
-
-                lbls = [
-                    "اليوم" if i == 0
-                    else DAYS_AR[(datetime.now() + timedelta(days=i)).weekday() % 7]
-                    for i in range(min(7, len(dw)))
-                ]
-
-                chart_data = pd.DataFrame({
-                    "اليوم": lbls,
-                    "الرياح (كم/س)":   [round(v) if v is not None else 0 for v in dw[:len(lbls)]],
-                    "الأمواج (م)":     [round(v, 2) if v is not None else 0 for v in dwv[:len(lbls)]],
-                    "الحرارة (°م)":    [round(v) if v is not None else 0 for v in dt[:len(lbls)]],
-                    "التورم البحري (م)":[round(v, 2) if v is not None else 0 for v in dsw[:len(lbls)]],
-                }).set_index("اليوم")
-
-                st.markdown(
-                    '<div class="map-section-label" style="margin-top:4px;">📈 توقعات الأسبوع القادم</div>',
-                    unsafe_allow_html=True
-                )
-                st.line_chart(
-                    chart_data,
-                    height=220,
-                    use_container_width=True,
-                    color=["#38BDF8", "#10B981", "#F59E0B", "#A78BFA"]
-                )
-            except Exception:
-                pass
-
-        except Exception as e:
-            st.error(f"⚠️ يرجى اختيار نقطة داخل البحر لتشغيل التحليلات.")
-
-# ─── الفوتر ───────────────────────────────────────────────────────────────────
-st.markdown("""
-<div class="footer">
-  Marine Tracker PRO • بيانات Open-Meteo • الخرائط OpenStreetMap
-</div>
-""", unsafe_allow_html=True)
+        except Exception:
+            st.error("⚠️ حدث خطأ أثناء معالجة البيانات الهيدرولوجية والجوية.")
