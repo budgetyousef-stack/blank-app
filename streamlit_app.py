@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 # ─── إعدادات الصفحة والهوية الجديدة ───────────────────────────────────────────
 st.set_page_config(
     page_title="Marso | مَارسُو",
-    page_icon="🎣",
+    page_icon="⚓",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
@@ -21,7 +21,7 @@ st.set_page_config(
 # ─── CSS احترافي متجاوب ───────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght=400;600;700;800;900&display=swap');
 
 *, html, body { box-sizing: border-box; }
 html, body, [class*="css"], .stApp, .block-container {
@@ -71,14 +71,15 @@ iframe[title="st_folium.frontend"] { border-radius: 14px !important; border: 1px
 
 .cache-status-badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 0.75rem; font-weight: 800; margin-bottom: 12px; background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.2); color: #38BDF8; }
 
-.main-title { color: #38BDF8; text-align: center; font-size: clamp(2rem, 6vw, 3rem); font-weight: 900; margin: 10px 0 0 0; letter-spacing: -0.5px; text-shadow: 0 0 40px rgba(56,189,248,0.3); }
-.divider { width: 60px; height: 4px; background: linear-gradient(90deg, #38BDF8, #0EA5E9); border-radius: 4px; margin: 16px auto 24px auto; }
+.main-title { color: #38BDF8; text-align: center; font-size: clamp(1.8rem, 5vw, 2.6rem); font-weight: 900; margin: 0; letter-spacing: -0.5px; text-shadow: 0 0 40px rgba(56,189,248,0.3); }
+.sub-title { color: #64748B; text-align: center; font-size: clamp(0.85rem, 2.5vw, 1rem); font-weight: 600; margin-top: 6px; }
+.divider { width: 50px; height: 4px; background: linear-gradient(90deg, #38BDF8, #0EA5E9); border-radius: 4px; margin: 12px auto 20px auto; }
 
-@media (max-width: 480px) { .block-container { padding: 0.6rem 0.6rem 2rem 0.6rem !important; } .card { padding: 14px 12px; border-radius: 14px; } }
+@media (max-width: 480px) { .block-container { padding: 0.6rem 0.6rem 2rem 0.6rem !important; } .card { padding: 14px 12px; border-radius: 14px; } .metric-row { gap: 6px; } }
 </style>
 """, unsafe_allow_html=True)
 
-# ─── ثوابت ودوال ──────────────────────────────────────────────────────────────
+# ─── ثوابت ────────────────────────────────────────────────────────────────────
 DAYS_AR   = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"]
 MONTHS_AR = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"]
 
@@ -129,7 +130,7 @@ def find_tide_events(heights: list) -> dict:
         else: dx, val = 0, y2
         exact_h = i + dx
         val = round(max(0.0, val), 2)
-        if y2 >= y1and y2 >= y3: highs.append((exact_h, val))
+        if y2 >= y1 and y2 >= y3: highs.append((exact_h, val))
         elif y2 <= y1 and y2 <= y3: lows.append((exact_h, val))
     return {"highs": highs, "lows": lows}
 
@@ -168,7 +169,7 @@ def fetch_weather_live(lat: float, lon: float):
         return None, None
 
 def get_cached_marine_data(lat: float, lon: float):
-    cache_file = "marso_data_cache.json"
+    cache_file = "marso_data_cache.json" # تم تعديل اسم ملف الكاش المكتوب محلياً
     current_time = time.time()
     one_week_seconds = 7 * 24 * 3600
     loc_key = f"{round(lat, 2)},{round(lon, 2)}"
@@ -214,8 +215,9 @@ def fmt_exact_time(h_float):
     p = "ص" if h_int < 12 else "م"
     return f"{h_int % 12 or 12:02d}:{m_int:02d} {p}"
 
-# ─── واجهة المستخدم النظيفة ──────────────────────────────────────────────────
-st.markdown('<h1 class="main-title">🎣 MARSO</h1>', unsafe_allow_html=True)
+# ─── واجهة المستخدم الهوية الجديدة ────────────────────────────────────────────
+st.markdown('<h1 class="main-title">⚓ MARSO</h1>', unsafe_allow_html=True)
+st.markdown('<p class="sub-title">المرشد البحري الذكي لرحلات الصيد</p>', unsafe_allow_html=True)
 st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
 
 if "coords" not in st.session_state: st.session_state["coords"] = (26.9239, 49.8681)
