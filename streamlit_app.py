@@ -8,11 +8,11 @@ from datetime import datetime, timedelta
 st.set_page_config(
     page_title="Marine Tracker PRO",
     page_icon="🌊",
-    layout="centered", # تحويل لعرض متناسق وممتاز للجوال
+    layout="centered",
     initial_sidebar_state="collapsed"
 )
 
-# التنسيق النظيف الموزون هندسياً للجوالات والكمبيوتر
+# تنسيق الواجهة الاحترافي وضمان ثبات الخريطة على الجوال
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght=400;600;700;800&display=swap');
@@ -23,16 +23,11 @@ st.markdown("""
     }
     .stApp { background-color: #0F172A; }
 
-    /* تأمين حجم الخريطة وعرضها لمنع الدمار والكسر على الجوال */
-    .stFoliumMap {
+    /* ضبط الحاوية لضمان فرش الخريطة بكامل عرض شاشة الجوال بشكل سليم */
+    .stFoliumMap, .stFoliumMap iframe, iframe {
         width: 100% !important;
-        border-radius: 16px;
-        overflow: hidden;
-        border: 1px solid #334155;
-    }
-    iframe {
-        width: 100% !important;
-        border-radius: 16px;
+        border-radius: 16px !important;
+        border: 1px solid #334155 !important;
     }
 
     /* Header */
@@ -59,7 +54,7 @@ st.markdown("""
         margin: 0 auto 24px auto;
     }
 
-    /* العنوان التلقائي داخل المستطيل */
+    /* مستطيل العنوان المحدد الفخم */
     .location-box {
         background-color: #1E293B;
         border: 2px solid #38BDF8;
@@ -69,7 +64,7 @@ st.markdown("""
         color: #F1F5F9;
         font-size: 1.1rem;
         font-weight: 700;
-        margin-bottom: 20px;
+        margin-bottom: 24px;
     }
 
     /* Cards */
@@ -101,17 +96,17 @@ st.markdown("""
     .metric-value { font-size: 1.15rem; font-weight: 700; color: #F1F5F9; }
     .metric-label { font-size: 0.75rem; color: #64748B; margin-top: 2px; }
 
-    /* Status badges */
+    /* Badges */
     .badge-excellent { background: #10B981; color: white; padding: 4px 14px; border-radius: 20px; font-size: 0.8rem; font-weight: 700; }
     .badge-good      { background: #F59E0B; color: white; padding: 4px 14px; border-radius: 20px; font-size: 0.8rem; font-weight: 700; }
     .badge-bad       { background: #EF4444; color: white; padding: 4px 14px; border-radius: 20px; font-size: 0.8rem; font-weight: 700; }
 
-    /* Activity level bar */
+    /* Progress Bar */
     .activity-bar-wrap { background: #0F172A; border-radius: 8px; height: 14px; overflow: hidden; margin: 8px 0 4px 0; }
     .activity-bar-fill { height: 100%; border-radius: 8px; transition: width 0.6s; }
     .activity-labels { display: flex; justify-content: space-between; font-size: 0.72rem; color: #64748B; direction: rtl; }
 
-    /* Best hours chips */
+    /* Chips */
     .hour-chip {
         display: inline-block;
         background: #0ea5e9;
@@ -210,7 +205,6 @@ def get_location_name(lat: float, lon: float) -> str:
         headers = {'User-Agent': 'MarineTrackerBot/1.0'}
         res = requests.get(url, headers=headers, timeout=5).json()
         address = res.get("address", {})
-        # محاولة جلب اسم المدينة أو القرية أو الضاحية بالعربي
         return address.get("city") or address.get("town") or address.get("village") or address.get("suburb") or address.get("state") or "منطقة بحرية مفتوحة"
     except:
         return "منطقة بحرية"
@@ -221,7 +215,7 @@ st.markdown('<h1 class="main-title">🌊 MARINE TRACKER</h1>', unsafe_allow_html
 st.markdown('<p class="sub-title">المرشد البحري الذكي لرحلات الصيد</p>', unsafe_allow_html=True)
 st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
 
-# ─── المستطيل الذكي للعنوان المحدد ───────────────────────────────────────────
+# ─── المستطيل الذكي للعنوان ───────────────────────────────────────────────────
 
 if st.session_state.get("clicked_coordinates"):
     clat, clon = st.session_state["clicked_coordinates"]
@@ -233,11 +227,10 @@ else:
 
 st.markdown(f'<div class="location-box">{display_text}</div>', unsafe_allow_html=True)
 
-# ─── الخريطة التفاعلية (تظهر بعرض كامل ومتناسق) ───────────────────────────────
+# ─── الخريطة التفاعلية المستقرة ────────────────────────────────────────────────
 
 st.markdown('<div class="card">', unsafe_allow_html=True)
 st.markdown('<div class="card-title">🗺️ خريطة الصيد التفاعلية</div>', unsafe_allow_html=True)
-st.info("💡 كبّر الخريطة واضغط على أي مكان في البحر لوضع الدبوس والمربع الشفاف وتحليله فوراً.")
 
 init_lat = MAP_START_LAT
 init_lon = MAP_START_LON
@@ -253,7 +246,8 @@ if st.session_state.get("clicked_coordinates"):
     folium.Marker(location=[clat, clon], icon=folium.Icon(color="blue", icon="anchor", prefix="fa")).add_to(m)
     folium.Circle(location=[clat, clon], radius=4000, color="#38BDF8", fill=True, fill_color="#38BDF8", fill_opacity=0.15, weight=2).add_to(m)
 
-map_data = st_folium(m, height=400, use_container_width=True, returned_objects=["last_clicked"], key="marine_map")
+# تشغيل الخريطة بشكل متوافق تماماً مع حاويات الشاشة مجاناً
+map_data = st_folium(m, height=400, use_container_width=True, key="marine_map")
 
 if map_data and map_data.get("last_clicked"):
     new_lat = map_data["last_clicked"]["lat"]
@@ -264,7 +258,7 @@ if map_data and map_data.get("last_clicked"):
 
 st.markdown('</div>', unsafe_allow_html=True)
 
-# ─── بطاقات التحليل والتقارير والرسومات (تظهر بالأسفل بشكل مريح ونظيف) ─────────
+# ─── بطاقات التقارير ──────────────────────────────────────────────────────────
 
 if st.session_state.get("clicked_coordinates"):
     clicked_lat, clicked_lon = st.session_state["clicked_coordinates"]
