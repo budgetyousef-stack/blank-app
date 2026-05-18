@@ -3,7 +3,6 @@ import requests
 import folium
 import pandas as pd
 import math
-import plotly.graph_objects as go
 from streamlit_folium import st_folium
 from datetime import datetime, timedelta
 
@@ -18,7 +17,7 @@ st.set_page_config(
 # ─── CSS احترافي متجاوب ───────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght=400;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap');
 
 *, html, body { box-sizing: border-box; }
 html, body, [class*="css"], .stApp, .block-container {
@@ -28,37 +27,19 @@ html, body, [class*="css"], .stApp, .block-container {
 .stApp { background-color: #0A1628 !important; }
 .block-container { padding: 1rem 1rem 2rem 1rem !important; max-width: 720px !important; }
 
-/* إخفاء شريط Streamlit */
 #MainMenu, footer, header { visibility: hidden !important; }
 [data-testid="stToolbar"] { display: none !important; }
 
-.map-section-label {
-    color: #38BDF8; font-size: clamp(0.95rem, 2.8vw, 1.1rem);
-    font-weight: 800; text-align: right; margin-bottom: 8px; padding: 0 2px;
-}
-
+.map-section-label { color: #38BDF8; font-size: clamp(0.95rem, 2.8vw, 1.1rem); font-weight: 800; text-align: right; margin-bottom: 8px; padding: 0 2px; }
 .stFoliumMap { border-radius: 14px !important; overflow: hidden !important; }
 iframe[title="st_folium.frontend"] { border-radius: 14px !important; border: 1px solid #1E3A5F !important; width: 100% !important; }
 
-.location-box {
-    background: linear-gradient(135deg, #1E293B 0%, #0F2137 100%);
-    border: 2px solid #38BDF8; border-radius: 14px; padding: 14px 18px;
-    text-align: center; color: #F1F5F9; font-size: clamp(0.9rem, 2.8vw, 1.05rem);
-    font-weight: 700; margin-bottom: 16px; box-shadow: 0 0 20px rgba(56,189,248,0.12);
-}
-
-.card {
-    background: linear-gradient(145deg, #1E293B 0%, #162032 100%);
-    border: 1px solid #1E3A5F; border-radius: 18px; padding: 18px;
-    margin-bottom: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.3);
-}
+.location-box { background: linear-gradient(135deg, #1E293B 0%, #0F2137 100%); border: 2px solid #38BDF8; border-radius: 14px; padding: 14px 18px; text-align: center; color: #F1F5F9; font-size: clamp(0.9rem, 2.8vw, 1.05rem); font-weight: 700; margin-bottom: 16px; box-shadow: 0 0 20px rgba(56,189,248,0.12); }
+.card { background: linear-gradient(145deg, #1E293B 0%, #162032 100%); border: 1px solid #1E3A5F; border-radius: 18px; padding: 18px; margin-bottom: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.3); }
 .card-title { color: #38BDF8; font-size: clamp(0.95rem, 2.8vw, 1.1rem); font-weight: 800; margin-bottom: 14px; text-align: right; }
 
 .metric-row { display: flex; gap: 10px; margin-bottom: 14px; direction: rtl; flex-wrap: wrap; }
-.metric-box {
-    flex: 1; min-width: 80px; background: rgba(56,189,248,0.06);
-    border: 1px solid rgba(56,189,248,0.15); border-radius: 12px; padding: 12px 6px; text-align: center;
-}
+.metric-box { flex: 1; min-width: 80px; background: rgba(56,189,248,0.06); border: 1px solid rgba(56,189,248,0.15); border-radius: 12px; padding: 12px 6px; text-align: center; }
 .metric-value { font-size: clamp(1rem, 3vw, 1.2rem); font-weight: 800; color: #F1F5F9; }
 .metric-label { font-size: clamp(0.68rem, 2vw, 0.78rem); color: #64748B; margin-top: 3px; }
 
@@ -66,20 +47,9 @@ iframe[title="st_folium.frontend"] { border-radius: 14px !important; border: 1px
 .badge-good      { background: linear-gradient(135deg,#D97706,#F59E0B); color:white; padding:5px 16px; border-radius:20px; font-size:0.82rem; font-weight:800; }
 .badge-bad       { background: linear-gradient(135deg,#DC2626,#EF4444); color:white; padding:5px 16px; border-radius:20px; font-size:0.82rem; font-weight:800; }
 
-.range-chip {
-    display: inline-block; background: linear-gradient(135deg, #0369A1, #0EA5E9);
-    color: white; font-weight: 800; font-size: clamp(0.75rem, 2.2vw, 0.85rem);
-    padding: 5px 14px; border-radius: 22px; margin: 4px 0 4px 6px; box-shadow: 0 2px 8px rgba(14,165,233,0.35); white-space: nowrap;
-}
-
 .advice-excellent { color:#10B981; font-weight:700; text-align:right; font-size:0.9rem; margin-top:10px; line-height:1.6; }
 .advice-good      { color:#F59E0B; font-weight:700; text-align:right; font-size:0.9rem; margin-top:10px; line-height:1.6; }
 .advice-bad       { color:#EF4444; font-weight:700; text-align:right; font-size:0.9rem; margin-top:10px; line-height:1.6; }
-
-.factor-row { display:flex; gap:8px; margin-top:14px; direction:rtl; flex-wrap:wrap; }
-.factor-box { flex:1; min-width:70px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:10px; padding:10px 6px; text-align:center; }
-.factor-label { font-size:0.72rem; color:#64748B; margin-top:4px; }
-.factor-value { font-size:0.9rem; font-weight:800; }
 
 .act-ring-wrap { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px 10px 10px 10px; }
 .act-ring-inner { position: relative; width: 160px; height: 160px; }
@@ -102,14 +72,9 @@ iframe[title="st_folium.frontend"] { border-radius: 14px !important; border: 1px
 .sol-chip-major { background: rgba(56,189,248,0.12); border: 1px solid rgba(56,189,248,0.3); color: #E0F2FE; }
 .sol-chip-minor { background: rgba(167,139,250,0.10); border: 1px solid rgba(167,139,250,0.25); color: #EDE9FE; }
 .sol-chip-label { font-size: 0.65rem; color: #64748B; margin-top: 3px; }
-
 .tide-details-box { background: rgba(30,41,59,0.4); border: 1px solid rgba(255,255,255,0.05); padding: 14px; border-radius: 14px; margin-top: -10px; margin-bottom: 16px; }
 
-@media (max-width: 480px) {
-    .block-container { padding: 0.6rem 0.6rem 2rem 0.6rem !important; }
-    .card { padding: 14px 12px; border-radius: 14px; }
-    .metric-row { gap: 6px; } .factor-row { gap: 6px; }
-}
+@media (max-width: 480px) { .block-container { padding: 0.6rem 0.6rem 2rem 0.6rem !important; } .card { padding: 14px 12px; border-radius: 14px; } .metric-row { gap: 6px; } }
 </style>
 """, unsafe_allow_html=True)
 
@@ -123,7 +88,6 @@ def _day_option_label(offset: int) -> str:
     if offset == 0: return f"اليوم ({day_str})"
     else: return f"{DAYS_AR[(d.weekday() + 1) % 7]} ({day_str})"
 
-# ─── نموذج نشاط الأسماك المطور ───────────────────────────────────────────────
 def fish_activity_score(wind: float, wave: float, temp: float, swell: float = 0.0) -> dict:
     score = 100
     if wind <= 10: w_status, w_label = "#10B981", "مثالي"
@@ -134,46 +98,13 @@ def fish_activity_score(wind: float, wave: float, temp: float, swell: float = 0.
     elif wave <= 0.7: wv_status, wv_label = "#F59E0B", "خفيف"; score -= 15
     else: wv_status, wv_label = "#EF4444", "عالي"; score -= 45
 
-    if 22 <= temp <= 30: t_status, t_label = "#10B981", "مثالية"
-    elif 18 <= temp <= 36: t_status, t_label = "#F59E0B", "مقبولة"; score -= 5
-    else: t_status, t_label = "#EF4444", "قاسية"; score -= 20
-
     if swell > 1.5: score -= 15
     score = max(5, min(100, score))
 
-    if score >= 65:
-        level, label, color = "high", "نشاط عالي 🎣", "#10B981"
-        advice = "ظروف مثالية — الأسماك نشيطة وقريبة من السطح. أنسب وقت للمحادق وصيد السيف!"
-    elif score >= 35:
-        level, label, color = "medium", "نشاط متوسط 🐟", "#F59E0B"
-        advice = "ظروف مقبولة — الأسماك نشيطة جزئياً. الصيد ممكن مع بعض الصبر."
-    else:
-        level, label, color = "low", "نشاط منخفض ⚠️", "#EF4444"
-        advice = "ظروف صعبة — الأسماك في الأعماق والبحر غير مناسب حالياً."
+    if score >= 65: return {"label": "نشاط عالي 🎣", "color": "#10B981", "score": score, "advice": "ظروف مثالية — الأسماك نشيطة وقريبة من السطح. أنسب وقت للمحادق!"}
+    elif score >= 35: return {"label": "نشاط متوسط 🐟", "color": "#F59E0B", "score": score, "advice": "ظروف مقبولة — الأسماك نشيطة جزئياً. الصيد ممكن مع بعض الصبر."}
+    else: return {"label": "نشاط منخفض ⚠️", "color": "#EF4444", "score": score, "advice": "ظروف صعبة — البحر غير مناسب حالياً."}
 
-    return {
-        "level": level, "label": label, "color": color, "score": score, "advice": advice,
-        "wind_status": w_status, "wind_label": w_label, "wave_status": wv_status, "wave_label": wv_label, "temp_status": t_status, "temp_label": t_label,
-    }
-
-def build_time_ranges(good_hours: list) -> list:
-    if not good_hours: return []
-    ranges, start, end = [], good_hours[0], good_hours[0]
-    for h in good_hours[1:]:
-        if h == end + 1: end = h
-        else: ranges.append((start, end)); start = end = h
-    ranges.append((start, end))
-
-    chips = []
-    for s, e in ranges:
-        def fmt(h):
-            h_wrapped = h % 24
-            return f"{h_wrapped % 12 or 12}:00 {'ص' if h_wrapped < 12 else 'م'}"
-        if s == e: chips.append(fmt(s))
-        else: chips.append(f"{fmt(s)} — {fmt(e + 1)}")
-    return chips
-
-# ─── نموذج المد والجزر التوافقي الحسابي ───────────────────────────────────────
 def _tide_amplitudes(lat: float, lon: float) -> dict:
     if (23 <= lat <= 30) and (48 <= lon <= 57): return dict(M2=0.88, S2=0.26, K1=0.15, O1=0.09, base=1.05)
     return dict(M2=0.60, S2=0.20, K1=0.18, O1=0.12, base=0.75)
@@ -206,11 +137,10 @@ def get_moon_phase(date: datetime) -> dict:
     yy, mm = y + 4800 - a, m + 12 * a - 3
     jdn = d + (153 * mm + 2) // 5 + 365 * yy + yy // 4 - yy // 100 + yy // 400 - 32045 + (date.hour - 12) / 24.0
     age = (jdn - ref_jdn) % synodic
-    illumination = int(round((1 - math.cos(2 * math.pi * age / synodic)) / 2 * 100))
-    if age < 1.85: return {"emoji": "🌑", "phase_ar": "محاق — قمر جديد", "tip": "المياه مظلمة والأسماك تتغذى بجرأة قرب السطح."}
-    elif age < 7.38: return {"emoji": "🌒", "phase_ar": "هلال متصاعد", "tip": "تيارات جيدة وبداية حركة ممتازة للأسماك."}
-    elif age < 16.61: return {"emoji": "🌕", "phase_ar": "بدر — قمر كامل", "tip": "ذروة تيار الحمل الفعال! الأسماك في أقصى نشاطها العالي."}
-    else: return {"emoji": "🌘", "phase_ar": "هلال متناقص", "tip": "النشاط يقل تدريجياً ويفضل الصيد الساحلي الهادئ."}
+    if age < 1.85: return {"emoji": "🌑", "phase_ar": "محاق — قمر جديد", "tip": "المياه مظلمة والأسماك تتغذى بجرأة قرب السطح.", "age": age}
+    elif age < 7.38: return {"emoji": "🌒", "phase_ar": "هلال متصاعد", "tip": "تيارات جيدة وبداية حركة ممتازة للأسماك.", "age": age}
+    elif age < 16.61: return {"emoji": "🌕", "phase_ar": "بدر — قمر كامل", "tip": "ذروة تيار الحمل الفعال! الأسماك في أقصى نشاطها العالي.", "age": age}
+    else: return {"emoji": "🌘", "phase_ar": "هلال متناقص", "tip": "النشاط يقل تدريجياً ويفضل الصيد الساحلي الهادئ.", "age": age}
 
 def compute_solunar_times(moon_age: float, lon: float) -> dict:
     synodic = 29.53059
@@ -237,12 +167,11 @@ def get_location_name(lat: float, lon: float) -> str:
         res = requests.get(f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json&accept-language=ar", headers={"User-Agent": "MarineTrackerPRO/2.0"}).json()
         addr = res.get("address", {})
         return addr.get("city") or addr.get("town") or addr.get("state") or "منطقة بحرية مفتوحة"
-    except: return "منطقة الجبيل البحرية"
+    except: return "منطقة بحرية"
 
 # ─── واجهة المستخدم ───────────────────────────────────────────────────────────
 st.markdown('<h1 class="main-title">🌊 MARINE TRACKER</h1>', unsafe_allow_html=True)
 st.markdown('<p class="sub-title">المرشد البحري الذكي لرحلات الصيد</p>', unsafe_allow_html=True)
-st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
 
 if "coords" not in st.session_state: st.session_state["coords"] = (26.9239, 49.8681)
 
@@ -253,7 +182,6 @@ _day_options = [_day_option_label(i) for i in range(7)]
 _selected_day = st.segmented_control(label="اختر اليوم", options=_day_options, default=_day_options[0], label_visibility="collapsed")
 day_offset = _day_options.index(_selected_day) if _selected_day in _day_options else 0
 
-# الخريطة الهجينة الفاخرة لخرائط جوجل
 st.markdown('<div class="map-section-label">🗺️ خريطة قوقل مابس التفاعلية (قم بالتحريك والنقر لتغيير المكان)</div>', unsafe_allow_html=True)
 m = folium.Map(location=[flat, flon], zoom_start=11, tiles="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", attr="Google Maps Satellite Hybrid")
 folium.Marker(location=[flat, flon], icon=folium.Icon(color="blue", icon="anchor", prefix="fa")).add_to(m)
@@ -265,7 +193,6 @@ if map_data and map_data.get("last_clicked"):
         st.session_state["coords"] = new_coords
         st.rerun()
 
-# تحليل وعرض البيانات المخزنة
 w_res, m_res = fetch_weather(flat, flon)
 if w_res and "hourly" in w_res:
     hw, hm = w_res["hourly"], m_res["hourly"]
@@ -273,20 +200,16 @@ if w_res and "hourly" in w_res:
     data_idx = min((day_offset * 24) + curr_h, len(hw["temperature_2m"]) - 1)
 
     t_now = hw["temperature_2m"][data_idx]
-    t_feels = hw["apparent_temperature"][data_idx]
     wind_now = hw["windspeed_10m"][data_idx]
     wind_dir = hw["winddirection_10m"][data_idx]
     wave_now = hm["wave_height"][data_idx]
-    wave_period = hm["wave_period"][data_idx]
     swell_now = hm["swell_wave_height"][data_idx]
     sst = hm["sea_surface_temperature"][data_idx]
 
-    # سهم ديناميكي لاتجاه الرياح
     arrow_style = f"transform: rotate({wind_dir}deg); display: inline-block; font-size: 1.1rem; color: #38BDF8;"
-
-    if wind_now < 14 and wave_now < 0.5: status, badge, adv = "excellent", "badge-excellent", "الوضع ممتاز: بحر هادئ تماماً، ركود مثالي وحركة مريحة للصيد."
+    if wind_now < 14 and wave_now < 0.5: status, badge, adv = "excellent", "badge-excellent", "الوضع ممتاز: بحر هادئ تماماً وحركة مريحة للصيد."
     elif wind_now < 22 and wave_now < 0.9: status, badge, adv = "good", "badge-good", "الوضع جيد: بحر خفيف ومناسب للمحادق الساحلية مع أخذ الحيطة."
-    else: status, badge, adv = "bad", "badge-bad", "الوضع محظور: رياح نشطة وموج عالي، يفضل تأجيل الكشتة البحرية حفاظاً على سلامتك."
+    else: status, badge, adv = "bad", "badge-bad", "الوضع محظور: رياح نشطة وموج عالي، يفضل تأجيل الكشتة البحرية."
 
     st.markdown(f"""
     <div class="card">
@@ -304,7 +227,6 @@ if w_res and "hourly" in w_res:
     </div>
     """, unsafe_allow_html=True)
 
-    # مؤشر نشاط الصيد الدائري
     act = fish_activity_score(wind_now, wave_now, t_now, swell_now)
     score, color = act["score"], act["color"]
     radius = 68; circ = 2 * math.pi * radius; filled = circ * score / 100
@@ -332,39 +254,31 @@ if w_res and "hourly" in w_res:
     </div>
     """, unsafe_allow_html=True)
 
-    # ─── 📉 منحنى المد والجزر (Plotly 12h + التلوين المتقدم) ───
+    # ─── 📉 منحنى المد والجزر (باستخدام أدوات Streamlit المدمجة الآمنة) ───
     try:
         target_date = datetime.now() + timedelta(days=day_offset)
         tide_heights = compute_tide_profile(flat, flon, target_date)
-        
-        # استخراج الفترات القصوى الحقيقية وعرضها (التحسين الرقمي)
         events = find_tide_events(tide_heights)
-        
-        fig = go.Figure()
-        fig.add_vrect(x0=0, x1=5.5, fillcolor="#0A1628", opacity=0.4, line_width=0)  # فجر ليل
-        fig.add_vrect(x0=5.5, x1=17.5, fillcolor="#ECEFF1", opacity=0.12, line_width=0) # نهار مشمس
-        fig.add_vrect(x0=17.5, x1=24, fillcolor="#0A1628", opacity=0.4, line_width=0)  # ليل المغرب
 
-        fig.add_trace(go.Scatter(
-            x=list(range(25)), y=tide_heights, mode='lines',
-            line=dict(color='#38BDF8', width=3.5, shape='spline'),
-            hovertemplate='<b>الارتفاع:</b> %{y} م<extra></extra>'
-        ))
+        # تجهيز مسميات 12 ساعة لتوافق المنحنى
+        labels_12h = []
+        for h in range(25):
+            h_wrapped = h % 24
+            p = "ص" if h_wrapped < 12 else "م"
+            h12 = h_wrapped % 12 or 12
+            labels_12h.append(f"{h12}:00 {p}")
 
-        if day_offset == 0:
-            fig.add_vline(x=curr_h, line_width=2, line_color="#EF4444")
-            fig.add_annotation(x=curr_h, y=tide_heights[curr_h] + 0.1, text="الوقت الحالي", showarrow=False, font=dict(color="#EF4444", size=11))
-
-        fig.update_layout(
-            margin=dict(l=20, r=20, t=15, b=15), height=210, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            xaxis=dict(tickmode='array', tickvals=[0, 6, 12, 18, 24], ticktext=['12 ص', '6 ص', '12 م', '6 م', '12 ص'], gridcolor='rgba(255,255,255,0.05)', tickfont=dict(color='#64748B')),
-            yaxis=dict(ticksuffix="m", gridcolor='rgba(255,255,255,0.05)', tickfont=dict(color='#64748B'))
+        tide_df = pd.DataFrame(
+            {"مستوى المد (متر)": tide_heights},
+            index=labels_12h
         )
-        
-        st.markdown('<div class="map-section-label" style="margin-top:12px;">📉 الهيدروغراف التماثلي لحركة السبر والمسقى (نظام 12 ساعة)</div>', unsafe_allow_html=True)
-        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
-        # عرض قيم المد والجزر القصوى بشكل منسق أسفل المنحنى مباشرة
+        st.markdown('<div class="map-section-label" style="margin-top:12px;">📉 حركة المد والجزر (نظام 12 ساعة)</div>', unsafe_allow_html=True)
+        
+        # استخدام area_chart المدمج ليعطي شكل جميل ومستقر 100%
+        st.area_chart(tide_df, color="#38BDF8", height=220)
+
+        # عرض أوقات أعلى مد وأدنى جزر تحت الرسم البياني
         st.markdown('<div class="tide-details-box">', unsafe_allow_html=True)
         c_low, c_high = st.columns(2)
         
@@ -386,22 +300,22 @@ if w_res and "hourly" in w_res:
     # ─── أوقات الصيد المثلى (Solunar) ───
     try:
         moon = get_moon_phase(datetime.now() + timedelta(days=day_offset))
-        sol = compute_solunar_times(moon["age"] if 'age' in moon else 14.0, flon)
+        sol = compute_solunar_times(moon["age"], flon)
         st.markdown(f"""
         <div class="card">
-          <div class="card-title">⏱️ فترات الصيد الذهبية (حسب الجذب الفلكي للقمر)</div>
+          <div class="card-title">⏱️ فترات الصيد الذهبية (حسب الجذب الفلكي)</div>
           <div class="solunar-wrap">
             <div class="solunar-col solunar-major">
               <div class="solunar-icon">🌊</div>
               <div class="solunar-heading">MAJOR TIMES (فترات رئيسية)</div>
-              <div class="sol-chip sol-chip-major">{sol["major"][0]}<div class="sol-chip-label">حركة أسماك كثيفة وممتازة</div></div>
-              <div class="sol-chip sol-chip-major">{sol["major"][1]}<div class="sol-chip-label">حركة أسماك كثيفة وممتازة</div></div>
+              <div class="sol-chip sol-chip-major">{sol["major"][0]}<div class="sol-chip-label">حركة أسماك كثيفة</div></div>
+              <div class="sol-chip sol-chip-major">{sol["major"][1]}<div class="sol-chip-label">حركة أسماك كثيفة</div></div>
             </div>
             <div class="solunar-col solunar-minor">
               <div class="solunar-icon">🌙</div>
               <div class="solunar-heading">MINOR TIMES (فترات ثانوية)</div>
-              <div class="sol-chip sol-chip-minor">{sol["minor"][0]}<div class="sol-chip-label">نشاط مرصود لفترة وجيزة</div></div>
-              <div class="sol-chip sol-chip-minor">{sol["minor"][1]}<div class="sol-chip-label">نشاط مرصود لفترة وجيزة</div></div>
+              <div class="sol-chip sol-chip-minor">{sol["minor"][0]}<div class="sol-chip-label">نشاط مرصود وجيز</div></div>
+              <div class="sol-chip sol-chip-minor">{sol["minor"][1]}<div class="sol-chip-label">نشاط مرصود وجيز</div></div>
             </div>
           </div>
           <div style="background: rgba(255,255,255,0.02); padding: 10px; border-radius: 10px; font-size: 0.85rem; color: #CBD5E1; text-align: right;">
@@ -410,5 +324,3 @@ if w_res and "hourly" in w_res:
         </div>
         """, unsafe_allow_html=True)
     except Exception: pass
-else:
-    st.error("⚠️ خطأ في الاتصال بالسيرفر المناخي. يرجى إعادة المحاولة.")
