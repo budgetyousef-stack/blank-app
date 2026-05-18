@@ -3,6 +3,7 @@ import requests
 import folium
 import pandas as pd
 import math
+import altair as alt
 from streamlit_folium import st_folium
 from datetime import datetime, timedelta
 
@@ -122,12 +123,23 @@ def compute_tide_profile(lat: float, lon: float, for_date: datetime) -> list:
         heights.append(round(max(0.05, level), 2))
     return heights
 
+# خوارزمية حساب الدقائق الدقيقة لأعلى وأدنى جزر
 def find_tide_events(heights: list) -> dict:
     highs, lows = [], []
     for i in range(1, len(heights) - 1):
-        prev, curr, nxt = heights[i - 1], heights[i], heights[i + 1]
-        if curr >= prev and curr >= nxt: highs.append((i, curr))
-        elif curr <= prev and curr <= nxt: lows.append((i, curr))
+        y1, y2, y3 = heights[i - 1], heights[i], heights[i + 1]
+        denom = y1 - 2*y2 + y3
+        if denom != 0:
+            dx = (y1 - y3) / (2 * denom)
+            val = y2 - ((y1 - y3)**2) / (8 * denom)
+        else:
+            dx, val = 0, y2
+            
+        exact_h = i + dx
+        val = round(max(0.0, val), 2)
+        
+        if y2 >= y1 and y2 >= y3: highs.append((exact_h, val))
+        elif y2 <= y1 and y2 <= y3: lows.append((exact_h, val))
     return {"highs": highs, "lows": lows}
 
 def get_moon_phase(date: datetime) -> dict:
@@ -254,45 +266,86 @@ if w_res and "hourly" in w_res:
     </div>
     """, unsafe_allow_html=True)
 
-    # ─── 📉 منحنى المد والجزر (باستخدام أدوات Streamlit المدمجة الآمنة) ───
+    # ─── 📉 منحنى المد والجزر باستخدام ALTAIR المدمجة (منحنى سلس وتنسيق جميل) ───
     try:
         target_date = datetime.now() + timedelta(days=day_offset)
         tide_heights = compute_tide_profile(flat, flon, target_date)
         events = find_tide_events(tide_heights)
 
-        # تجهيز مسميات 12 ساعة لتوافق المنحنى
         labels_12h = []
         for h in range(25):
-            h_wrapped = h % 24
-            p = "ص" if h_wrapped < 12 else "م"
-            h12 = h_wrapped % 12 or 12
+            p = "ص" if h < 12 or h == 24 else "م"
+            h12 = h % 12 or 12
             labels_12h.append(f"{h12}:00 {p}")
 
-        tide_df = pd.DataFrame(
-            {"مستوى المد (متر)": tide_heights},
-            index=labels_12h
-        )
+        tide_df = pd.DataFrame({
+            "hour": list(range(25)),
+            "height": tide_heights,
+            "label": labels_12h
+        })
 
-        st.markdown('<div class="map-section-label" style="margin-top:12px;">📉 حركة المد والجزر (نظام 12 ساعة)</div>', unsafe_allow_html=True)
-        
-        # استخدام area_chart المدمج ليعطي شكل جميل ومستقر 100%
-        st.area_chart(tide_df, color="#38BDF8", height=220)
+        # إعداد مخطط Altair بخط انسيابي ومحور X كل 4 ساعات
+        chart = alt.Chart(tide_df).mark_area(
+            line={'color': '#38BDF8', 'strokeWidth': 3},
+            color=alt.Gradient(
+                gradient='linear',
+                stops=[alt.GradientStop(color='rgba(56,189,248,0.6)', offset=0),
+                       alt.GradientStop(color='rgba(56,189,248,0.0)', offset=1)],
+                x1=1, x2=1, y1=0, y2=1
+            ),
+            interpolate='monotone'
+        ).encode(
+            x=alt.X('hour:Q',
+                    axis=alt.Axis(
+                        values=[0, 4, 8, 12, 16, 20, 24],
+                        labelExpr="datum.value == 0 ? '12 ص' : datum.value == 12 ? '12 م' : datum.value == 24 ? '12 ص' : datum.value < 12 ? datum.value + ' ص' : (datum.value - 12) + ' م'",
+                        labelColor="#94A3B8",
+                        gridColor="rgba(255,255,255,0.05)",
+                        title=None,
+                        labelFont="Cairo",
+                        labelFontSize=11
+                    )),
+            y=alt.Y('height:Q',
+                    scale=alt.Scale(domain=[min(tide_heights)-0.2, max(tide_heights)+0.2]),
+                    axis=alt.Axis(
+                        title=None,
+                        labelColor="#94A3B8",
+                        gridColor="rgba(255,255,255,0.05)",
+                        labelFont="Cairo",
+                        format=".1f"
+                    )),
+            tooltip=[
+                alt.Tooltip('label:N', title='الوقت'),
+                alt.Tooltip('height:Q', title='الارتفاع (م)')
+            ]
+        ).properties(height=200).configure_view(strokeWidth=0)
 
-        # عرض أوقات أعلى مد وأدنى جزر تحت الرسم البياني
+        st.markdown('<div class="map-section-label" style="margin-top:12px;">📉 حركة المد والجزر السلسة (نظام 12 ساعة)</div>', unsafe_allow_html=True)
+        st.altair_chart(chart, use_container_width=True)
+
+        # ─── تنسيق أوقات المد والجزر بالدقائق (احترافي جداً) ───
         st.markdown('<div class="tide-details-box">', unsafe_allow_html=True)
         c_low, c_high = st.columns(2)
         
-        def fmt_time_am_pm(h):
-            return f"{h % 12 or 12}:00 {'ص' if h < 12 else 'م'}"
+        def fmt_exact_time(h_float):
+            if h_float < 0: h_float += 24
+            h_int = int(h_float) % 24
+            m_int = int(round((h_float % 1) * 60))
+            if m_int == 60:
+                h_int = (h_int + 1) % 24
+                m_int = 0
+            p = "ص" if h_int < 12 else "م"
+            h12 = h_int % 12 or 12
+            return f"{h12:02d}:{m_int:02d} {p}"
             
         with c_low:
-            st.markdown("<p style='color:#94A3B8; font-size:0.8rem; margin:0;'>🔻 أدنى جزر متوقع (مياه الثبر):</p>", unsafe_allow_html=True)
-            for h_idx, val in events["lows"][:2]:
-                st.markdown(f"<span style='color:#ECEFF1; font-weight:700; font-size:0.95rem;'>{val:.2f} م </span> @ {fmt_time_am_pm(h_idx)}<br>", unsafe_allow_html=True)
+            st.markdown("<div style='color:#94A3B8; font-size:0.85rem; font-weight:700; margin-bottom:8px;'>🌊 Low Tides (أدنى جزر):</div>", unsafe_allow_html=True)
+            for h_exact, val in events["lows"][:2]:
+                st.markdown(f"<div style='color:#E2E8F0; font-size:1rem; font-weight:700; margin-bottom:4px;'>{val:.2f} م <span style='color:#64748B; font-weight:400; font-size:0.85rem;'>عند</span> {fmt_exact_time(h_exact)}</div>", unsafe_allow_html=True)
         with c_high:
-            st.markdown("<p style='color:#38BDF8; font-size:0.8rem; margin:0;'>🔺 أعلى مد متوقع (مياه جارية):</p>", unsafe_allow_html=True)
-            for h_idx, val in events["highs"][:2]:
-                st.markdown(f"<span style='color:#38BDF8; font-weight:700; font-size:0.95rem;'>{val:.2f} م </span> @ {fmt_time_am_pm(h_idx)}<br>", unsafe_allow_html=True)
+            st.markdown("<div style='color:#38BDF8; font-size:0.85rem; font-weight:700; margin-bottom:8px;'>🌊 High Tides (أعلى مد):</div>", unsafe_allow_html=True)
+            for h_exact, val in events["highs"][:2]:
+                st.markdown(f"<div style='color:#38BDF8; font-size:1rem; font-weight:700; margin-bottom:4px;'>{val:.2f} م <span style='color:#64748B; font-weight:400; font-size:0.85rem;'>عند</span> {fmt_exact_time(h_exact)}</div>", unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
     except Exception: pass
