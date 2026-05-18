@@ -235,95 +235,7 @@ iframe[title="st_folium.frontend"] {
 /* المخطط */
 [data-testid="stVegaLiteChart"] { border-radius:12px !important; overflow:hidden !important; }
 
-/* ── بطاقة المد والجزر ── */
-.tide-row {
-    display: flex;
-    gap: 10px;
-    align-items: stretch;
-    direction: rtl;
-    margin-bottom: 14px;
-    flex-wrap: wrap;
-}
-.tide-gauge-wrap {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-end;
-    background: rgba(56,189,248,0.05);
-    border: 1px solid rgba(56,189,248,0.18);
-    border-radius: 14px;
-    padding: 10px 8px 8px 8px;
-    min-width: 72px;
-    flex: 0 0 72px;
-}
-.tide-gauge-tube {
-    width: 28px;
-    height: 90px;
-    background: rgba(255,255,255,0.06);
-    border-radius: 20px;
-    overflow: hidden;
-    position: relative;
-    border: 1px solid rgba(56,189,248,0.25);
-    margin-bottom: 6px;
-}
-.tide-gauge-fill {
-    position: absolute;
-    bottom: 0; left: 0; right: 0;
-    border-radius: 0 0 20px 20px;
-    transition: height 0.6s ease;
-}
-.tide-gauge-label {
-    font-size: 0.7rem;
-    color: #64748B;
-    text-align: center;
-    line-height: 1.3;
-}
-.tide-gauge-value {
-    font-size: 0.85rem;
-    font-weight: 800;
-    color: #F1F5F9;
-    text-align: center;
-}
-.tide-info-wrap {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    justify-content: center;
-}
-.tide-status-banner {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    background: rgba(56,189,248,0.07);
-    border: 1px solid rgba(56,189,248,0.18);
-    border-radius: 12px;
-    padding: 10px 14px;
-    direction: rtl;
-}
-.tide-direction {
-    font-size: 1.5rem;
-    font-weight: 900;
-}
-.tide-status-text {
-    text-align: right;
-}
-.tide-status-title {
-    font-size: 1rem;
-    font-weight: 800;
-    line-height: 1.3;
-}
-.tide-status-sub {
-    font-size: 0.75rem;
-    color: #94A3B8;
-    margin-top: 2px;
-}
-.tide-events-row {
-    display: flex;
-    gap: 8px;
-    direction: rtl;
-    flex-wrap: wrap;
-}
+/* التنسيق الخاص بقوالب صفحة الويب */
 .tide-event-chip {
     flex: 1;
     min-width: 100px;
@@ -346,8 +258,6 @@ iframe[title="st_folium.frontend"] {
     .card { padding: 14px 12px; border-radius: 14px; }
     .metric-row { gap: 6px; }
     .factor-row { gap: 6px; }
-    .tide-row { gap: 8px; }
-    .tide-gauge-wrap { min-width: 60px; flex: 0 0 60px; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -441,14 +351,7 @@ def build_time_ranges(good_hours: list) -> list:
 
 # ─── نموذج المد والجزر التوافقي (Harmonic Tidal Model) ───────────────────────
 def _tide_amplitudes(lat: float, lon: float) -> dict:
-    """
-    Return regional tidal constituent amplitudes (metres) based on location.
-    Arabian Gulf: strong semi-diurnal, range ~1.5–2 m
-    Red Sea:      weak semi-diurnal,  range ~0.4–0.7 m
-    Gulf of Oman: moderate mixed,     range ~0.8–1.2 m
-    Open ocean:   moderate,           range ~0.7–1.0 m
-    """
-    in_gulf     = (23 <= lat <= 30) and (48 <= lon <= 57)   # Arabian / Persian Gulf
+    in_gulf     = (23 <= lat <= 30) and (48 <= lon <= 57)   # Arabian Gulf
     in_red_sea  = (12 <= lat <= 28) and (32 <= lon <= 44)   # Red Sea
     in_oman     = (22 <= lat <= 26) and (57 <= lon <= 62)   # Gulf of Oman
 
@@ -463,22 +366,12 @@ def _tide_amplitudes(lat: float, lon: float) -> dict:
 
 
 def compute_tide_profile(lat: float, lon: float, for_date: datetime) -> list:
-    """
-    Compute 25 hourly tidal heights (m above chart datum) for the given date
-    using the four main harmonic constituents plus one shallow-water overtide.
-    Returns list of 25 floats (hours 0–24 inclusive).
-    """
     amp = _tide_amplitudes(lat, lon)
-
-    # Hours elapsed since a fixed reference epoch (1 Jan 2000 00:00 UTC)
     ref = datetime(2000, 1, 1, 0, 0, 0)
     midnight = for_date.replace(hour=0, minute=0, second=0, microsecond=0)
     t0 = (midnight - ref).total_seconds() / 3600.0
 
-    # Tidal constituent periods (hours) — standard oceanographic values
     periods = dict(M2=12.4206, S2=12.0000, K1=23.9345, O1=25.8194, M4=6.2103)
-
-    # Phase offsets chosen so cycles feel natural across the Gulf region
     phases  = dict(M2=0.0, S2=1.05, K1=0.80, O1=0.55, M4=2.20)
 
     heights = []
@@ -493,10 +386,6 @@ def compute_tide_profile(lat: float, lon: float, for_date: datetime) -> list:
 
 
 def find_tide_events(heights: list) -> dict:
-    """
-    Detect local maxima (high tides) and minima (low tides) from a 25-point
-    hourly profile. Returns lists of (hour, height) tuples sorted by hour.
-    """
     highs, lows = [], []
     for i in range(1, len(heights) - 1):
         prev, curr, nxt = heights[i - 1], heights[i], heights[i + 1]
@@ -508,7 +397,6 @@ def find_tide_events(heights: list) -> dict:
 
 
 def fmt_tide_hour(h: int) -> str:
-    """Format an integer hour (0–24) into Arabic 12-hour notation."""
     period = "ص" if h < 12 else "م"
     h12 = h % 12 or 12
     return f"{h12}:00 {period}"
@@ -516,15 +404,9 @@ def fmt_tide_hour(h: int) -> str:
 
 # ─── حساب طور القمر الفلكي ────────────────────────────────────────────────────
 def get_moon_phase(date: datetime) -> dict:
-    """
-    Compute the lunar phase for a given datetime using the Julian Day Number
-    and the known synodic period of 29.53059 days.
-    Reference new moon: 2000-01-06 18:14 UTC → JDN 2451549.26
-    """
     synodic = 29.53059
-    ref_jdn  = 2451549.26  # known new moon JDN
+    ref_jdn  = 2451549.26
 
-    # Julian Day Number for the given date
     y, m, d = date.year, date.month, date.day
     a = (14 - m) // 12
     yy = y + 4800 - a
@@ -533,16 +415,12 @@ def get_moon_phase(date: datetime) -> dict:
            + yy // 4 - yy // 100 + yy // 400 - 32045
            + (date.hour - 12) / 24.0)
 
-    age = (jdn - ref_jdn) % synodic           # days since last new moon
-    illumination = int(round(
-        (1 - math.cos(2 * math.pi * age / synodic)) / 2 * 100
-    ))
+    age = (jdn - ref_jdn) % synodic
+    illumination = int(round((1 - math.cos(2 * math.pi * age / synodic)) / 2 * 100))
 
-    # Days to upcoming events
     days_to_full = (14.765 - age) % synodic
     days_to_new  = (synodic  - age) % synodic
 
-    # Phase classification
     if age < 1.85:
         emoji, phase_ar = "🌑", "محاق — قمر جديد"
         tidal, tidal_c   = "مدّ ربيعي قوي 💪", "#10B981"
@@ -670,7 +548,7 @@ if "coords" not in st.session_state:
 if "pending_coords" not in st.session_state:
     st.session_state["pending_coords"] = None
 
-# معالجة التحديث المعلق (نمط آمن يتجنب rerun داخل widget callback)
+# معالجة التحديث المعلق
 if st.session_state["pending_coords"] is not None:
     st.session_state["coords"] = st.session_state["pending_coords"]
     st.session_state["pending_coords"] = None
@@ -695,9 +573,7 @@ m = folium.Map(
     prefer_canvas=True,
 )
 
-# ── حقن CSS مباشرةً داخل وثيقة إطار الخريطة لمنع انعكاس RTL ──────────────
-# CSS injected via st.markdown cannot cross the iframe boundary.
-# We must write it into the Folium HTML document itself.
+# حقن CSS لإلغاء انعكاس الخريطة والمحافظة على الـ LTR فيها
 m.get_root().html.add_child(folium.Element("""
 <style>
 html, body,
@@ -755,7 +631,6 @@ if st.session_state["coords"]:
             hw = w_res["hourly"]
             hm = m_res["hourly"]
 
-            # حماية من أخطاء الفهرس في أوقات متأخرة من الليل
             total_hours = len(hw.get("temperature_2m", []))
             curr_h = min(datetime.now().hour, total_hours - 1) if total_hours > 0 else 0
 
@@ -777,8 +652,8 @@ if st.session_state["coords"]:
             sst         = safe_get(hm.get("sea_surface_temperature", []), curr_h)
             precip_prob = safe_get(hw.get("precipitation_probability", []), curr_h)
 
-            # أفضل ساعات الصيد (من الساعة الحالية حتى 24)
-            look_ahead = min(curr_h + 12, total_hours)
+            # تعديل: مسح الـ 24 ساعة بالكامل لصيد الفترتين الجيدتين للصيد
+            look_ahead = min(curr_h + 24, total_hours)
             good_hours = [
                 i for i in range(curr_h, look_ahead)
                 if safe_get(hw.get("windspeed_10m", []), i) <= 15
@@ -909,70 +784,18 @@ if st.session_state["coords"]:
             </div>
             """, unsafe_allow_html=True)
 
-            # ─── بطاقة المد والجزر ────────────────────────────────────────────
+            # ─── معالجة الحسابات للمنحنى (مع حذف عرض الأكواد الخربانة) ───
             try:
                 now = datetime.now()
                 tide_heights = compute_tide_profile(flat, flon, now)
-                tide_events  = find_tide_events(tide_heights)
-
-                # القيم الحالية
                 curr_tide_h  = min(curr_h, 24)
-                curr_level   = tide_heights[curr_tide_h]
-                next_level   = tide_heights[min(curr_tide_h + 1, 24)]
-                prev_level   = tide_heights[max(curr_tide_h - 1, 0)]
 
-                # اتجاه المد
-                rising = next_level >= curr_level
-                tide_arrow  = "↑" if rising else "↓"
-                tide_color  = "#10B981" if rising else "#38BDF8"
-                tide_status = "مد صاعد" if rising else "جزر هابط"
-                tide_sub    = "المياه في ارتفاع — جيد للصيد قرب الشاطئ" if rising else "المياه في انخفاض — أنسب للصيد في العمق"
-
-                # نطاق اليوم لمقياس البارومتر
-                day_min = min(tide_heights)
-                day_max = max(tide_heights)
-                tide_range = max(day_max - day_min, 0.1)
-                fill_pct = int(((curr_level - day_min) / tide_range) * 100)
-                fill_pct = max(5, min(95, fill_pct))
-
-                # لون التدرج بناءً على المستوى
-                if fill_pct > 65:
-                    gauge_grad = "linear-gradient(to top, #0369A1, #38BDF8)"
-                elif fill_pct > 35:
-                    gauge_grad = "linear-gradient(to top, #0C4A6E, #0EA5E9)"
-                else:
-                    gauge_grad = "linear-gradient(to top, #082F49, #0284C7)"
-
-                # بناء شرائح أوقات المد/الجزر
-                def build_event_chips(events_list, is_high: bool) -> str:
-                    icon  = "🔼" if is_high else "🔽"
-                    label = "مد عالٍ" if is_high else "جزر منخفض"
-                    bg    = "rgba(16,185,129,0.08)"  if is_high else "rgba(56,189,248,0.08)"
-                    bdr   = "#10B981" if is_high else "#38BDF8"
-                    ht_c  = "#10B981" if is_high else "#38BDF8"
-                    chips = ""
-                    for (h, ht) in events_list[:2]:
-                        chips += f"""
-                        <div class="tide-event-chip"
-                             style="background:{bg};border-color:{bdr};">
-                          <div class="ev-icon">{icon}</div>
-                          <div class="ev-label">{label}</div>
-                          <div class="ev-time" style="color:#F1F5F9;">{fmt_tide_hour(h)}</div>
-                          <div class="ev-height" style="color:{ht_c};">{ht:.2f} م</div>
-                        </div>"""
-                    return chips
-
-                high_chips = build_event_chips(tide_events["highs"], True)
-                low_chips  = build_event_chips(tide_events["lows"],  False)
-
-                # مخطط منحنى المد خلال 24 ساعة — سلسلة واحدة نظيفة
+                # إنشاء مخطط منحنى المد خلال 24 ساعة
                 tide_chart_data = pd.DataFrame(
                     {"المد (م)": [float(v) for v in tide_heights]},
                     index=list(range(25)),
                 )
 
-                # مخطط منحنى المد — بدون أغلفة HTML متقاطعة مع مكونات Streamlit
-                bar_pct = round(curr_tide_h / 24 * 100, 1)
                 st.markdown(
                     '<div class="map-section-label" style="margin-top:4px;">📉 منحنى المد والجزر — 24 ساعة</div>',
                     unsafe_allow_html=True
