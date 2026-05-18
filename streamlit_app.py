@@ -12,7 +12,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# تنسيق الواجهة وحل مشكلة اتجاه الخريطة
+# التنسيق النظيف بدون أي أكواد CSS تعكس المحاذاة أو تخرب الخريطة
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght=400;600;700;800&display=swap');
@@ -23,9 +23,10 @@ st.markdown("""
     }
     .stApp { background-color: #0F172A; }
 
-    /* حماية الخريطة من الانعكاس بسبب اللغة العربية */
-    .stFoliumMap, .stFoliumMap iframe, div[data-testid="stMarkdownContainer"] iframe {
-        direction: ltr !important;
+    /* تأمين حاوية الخريطة لتملأ العمود بشكل متناسق 100% وبدون شطحات */
+    .element-container iframe {
+        width: 100% !important;
+        border-radius: 12px;
     }
 
     /* Header */
@@ -122,19 +123,6 @@ st.markdown("""
         text-align: center;
     }
     .factor-label { font-size: 0.7rem; color: #64748B; margin-top: 4px; }
-
-    /* Day cards in forecast */
-    .day-cards { display: flex; gap: 8px; margin-top: 14px; direction: rtl; }
-    .day-card {
-        flex: 1;
-        background: rgba(255,255,255,0.03);
-        border-radius: 10px;
-        padding: 8px 4px;
-        text-align: center;
-        font-size: 0.78rem;
-        color: #CBD5E1;
-    }
-    .day-card-name { font-weight: 700; margin-bottom: 4px; }
 
     /* Footer */
     .footer { text-align: center; color: #334155; font-size: 0.75rem; margin-top: 32px; padding-bottom: 24px; }
@@ -241,31 +229,29 @@ st.markdown('<h1 class="main-title">🌊 MARINE TRACKER</h1>', unsafe_allow_html
 st.markdown('<p class="sub-title">المرشد البحري الذكي لرحلات الصيد</p>', unsafe_allow_html=True)
 st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
 
-# ─── Layout: two columns ──────────────────────────────────────────────────────
+# ─── Layout: columns ──────────────────────────────────────────────────────────
 
-col_left, col_right = st.columns([1, 1.3], gap="large")
+col_left, col_right = st.columns([1.1, 1.3], gap="large")
 
 with col_left:
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.markdown('<div class="card-title">🗺️ خريطة الصيد التفاعلية</div>', unsafe_allow_html=True)
     st.info("💡 كبّر الخريطة واضغط على أي مكان في البحر لوضع الدبوس والمربع الشفاف وتحليله فوراً.")
     
-    # تحديد مركز الخريطة الأولي
     init_lat = MAP_START_LAT
     init_lon = MAP_START_LON
     
     if st.session_state.get("clicked_coordinates"):
         init_lat, init_lon = st.session_state["clicked_coordinates"]
 
+    # إنشاء الخريطة بدون التعديل الخارجي الذي يسبب انقسام الواجهة
     m = folium.Map(
         location=[init_lat, init_lon],
         zoom_start=9,
-        tiles="CartoDB dark_matter",
-        width="100%"
+        tiles="CartoDB dark_matter"
     )
     m.add_child(folium.LatLngPopup())
     
-    # رسم الدبوس والمربع عند النقر الثابت
     if st.session_state.get("clicked_coordinates"):
         clat, clon = st.session_state["clicked_coordinates"]
         folium.Marker(
@@ -283,8 +269,8 @@ with col_left:
             weight=2
         ).add_to(m)
     
-    # استدعاء الخريطة مع إلغاء تأثير الـ RTL عليها داخلياً
-    map_data = st_folium(m, height=450, use_container_width=True, key="marine_map")
+    # عرض الخريطة مع تفعيل ميزة الاستجابة لعرض الصفحة تلقائياً لضبط مكانها
+    map_data = st_folium(m, height=450, returned_objects=["last_clicked"], key="marine_map")
     
     if map_data and map_data.get("last_clicked"):
         new_lat = map_data["last_clicked"]["lat"]
@@ -390,7 +376,7 @@ with col_right:
                 f'<div class="activity-labels"><span>منخفض</span><span>متوسط</span><span>عالي</span></div>'
                 f'<div class="activity-bar-wrap">'
                 f'<div class="activity-bar-fill" style="width:{act["bar_pct"]}%;'
-                f'background:linear-gradient(90deg,#10B981,{act["color"]})"></div>'
+                f'background:linear-gradient(90deg,#10B981,#F59E0B)"></div>'
                 f'</div>'
                 f'<div style="text-align:left;font-size:0.7rem;color:#64748B;margin-bottom:10px">'
                 f'مؤشر النشاط: {act["score"]}/100</div>',
