@@ -3,7 +3,6 @@ import requests
 import folium
 import pandas as pd
 import math
-import plotly.graph_objects as go
 from streamlit_folium import st_folium
 from datetime import datetime, timedelta
 
@@ -15,10 +14,10 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ─── CSS احترافي متجاوب (RTL) ─────────────────────────────────────────────────
+# ─── CSS احترافي متجاوب ───────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght=400;600;700;800;900&display=swap');
 
 *, html, body { box-sizing: border-box; }
 html, body, [class*="css"], .stApp, .block-container {
@@ -28,13 +27,130 @@ html, body, [class*="css"], .stApp, .block-container {
 .stApp { background-color: #0A1628 !important; }
 .block-container { padding: 1rem 1rem 2rem 1rem !important; max-width: 720px !important; }
 
-/* إخفاء عناصر Streamlit الافتراضية */
+/* إخفاء شريط Streamlit */
 #MainMenu, footer, header { visibility: hidden !important; }
 [data-testid="stToolbar"] { display: none !important; }
 
-/* الخريطة */
-.stFoliumMap { border-radius: 16px !important; overflow: hidden !important; border: 1px solid #1E3A5F !important; }
-.map-section-label { color: #38BDF8; font-size: 1.1rem; font-weight: 800; text-align: right; margin-bottom: 8px; }
+/* تسمية قسم الخريطة */
+.map-section-label {
+    color: #38BDF8;
+    font-size: clamp(0.95rem, 2.8vw, 1.1rem);
+    font-weight: 800;
+    text-align: right;
+    margin-bottom: 8px;
+    padding: 0 2px;
+}
+
+/* Force map containers to stay LTR and prevent mirroring */
+.stFoliumMap, div[data-testid="stIFrame"], iframe, .leaflet-container, .leaflet-pane, .leaflet-tile-pane, .leaflet-tile {
+    direction: ltr !important;
+    text-align: left !important;
+    transform: none !important;
+}
+/* حافة ومظهر إطار الخريطة */
+.stFoliumMap {
+    border-radius: 14px !important;
+    overflow: hidden !important;
+}
+iframe[title="st_folium.frontend"] {
+    border-radius: 14px !important;
+    border: 1px solid #1E3A5F !important;
+    width: 100% !important;
+}
+
+/* بطاقة القمر */
+.moon-row {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    direction: rtl;
+    margin-bottom: 16px;
+}
+.moon-emoji-wrap {
+    font-size: 3.8rem;
+    line-height: 1;
+    text-align: center;
+    min-width: 64px;
+    filter: drop-shadow(0 0 16px rgba(148,163,184,0.45));
+}
+.moon-info { flex: 1; text-align: right; }
+.moon-phase-name {
+    font-size: clamp(1rem, 3vw, 1.25rem);
+    font-weight: 900;
+    color: #F1F5F9;
+    line-height: 1.3;
+}
+.moon-illum {
+    font-size: 0.8rem;
+    color: #94A3B8;
+    margin-top: 4px;
+}
+.moon-events-row {
+    display: flex;
+    gap: 8px;
+    direction: rtl;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+.moon-event-box {
+    flex: 1;
+    min-width: 90px;
+    background: rgba(148,163,184,0.06);
+    border: 1px solid rgba(148,163,184,0.15);
+    border-radius: 12px;
+    padding: 10px 8px;
+    text-align: center;
+}
+.moon-event-label { font-size: 0.7rem; color: #64748B; }
+.moon-event-val   { font-size: 1rem; font-weight: 800; color: #F1F5F9; margin-top: 3px; }
+.moon-tip {
+    background: rgba(148,163,184,0.06);
+    border-right: 3px solid #94A3B8;
+    border-radius: 0 10px 10px 0;
+    padding: 10px 14px 10px 10px;
+    color: #CBD5E1;
+    font-size: 0.88rem;
+    line-height: 1.7;
+    text-align: right;
+}
+
+/* العنوان الرئيسي */
+.main-title {
+    color: #38BDF8;
+    text-align: center;
+    font-size: clamp(1.6rem, 5vw, 2.4rem);
+    font-weight: 900;
+    margin: 0;
+    letter-spacing: -0.5px;
+    text-shadow: 0 0 40px rgba(56,189,248,0.3);
+}
+.sub-title {
+    color: #64748B;
+    text-align: center;
+    font-size: clamp(0.85rem, 2.5vw, 1rem);
+    font-weight: 600;
+    margin-top: 6px;
+}
+.divider {
+    width: 50px; height: 4px;
+    background: linear-gradient(90deg, #38BDF8, #0EA5E9);
+    border-radius: 4px;
+    margin: 12px auto 20px auto;
+}
+
+/* مربع الموقع */
+.location-box {
+    background: linear-gradient(135deg, #1E293B 0%, #0F2137 100%);
+    border: 2px solid #38BDF8;
+    border-radius: 14px;
+    padding: 14px 18px;
+    text-align: center;
+    color: #F1F5F9;
+    font-size: clamp(0.9rem, 2.8vw, 1.05rem);
+    font-weight: 700;
+    margin-bottom: 16px;
+    box-shadow: 0 0 20px rgba(56,189,248,0.12);
+}
 
 /* البطاقات */
 .card {
@@ -45,207 +161,956 @@ html, body, [class*="css"], .stApp, .block-container {
     margin-bottom: 16px;
     box-shadow: 0 4px 24px rgba(0,0,0,0.3);
 }
-.card-title { color: #38BDF8; font-size: 1.05rem; font-weight: 800; margin-bottom: 14px; text-align: right; }
-
-/* المقاييس */
-.metric-row { display: flex; gap: 10px; margin-bottom: 14px; direction: rtl; flex-wrap: wrap; }
-.metric-box {
-    flex: 1; min-width: 80px; background: rgba(56,189,248,0.06);
-    border: 1px solid rgba(56,189,248,0.15); border-radius: 12px; padding: 12px 6px; text-align: center;
+.card-title {
+    color: #38BDF8;
+    font-size: clamp(0.95rem, 2.8vw, 1.1rem);
+    font-weight: 800;
+    margin-bottom: 14px;
+    text-align: right;
 }
-.metric-value { font-size: 1.2rem; font-weight: 800; color: #F1F5F9; }
-.metric-label { font-size: 0.75rem; color: #64748B; margin-top: 3px; }
+
+/* صف المقاييس */
+.metric-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+    direction: rtl;
+    flex-wrap: wrap;
+}
+.metric-box {
+    flex: 1;
+    min-width: 80px;
+    background: rgba(56,189,248,0.06);
+    border: 1px solid rgba(56,189,248,0.15);
+    border-radius: 12px;
+    padding: 12px 6px;
+    text-align: center;
+}
+.metric-value {
+    font-size: clamp(1rem, 3vw, 1.2rem);
+    font-weight: 800;
+    color: #F1F5F9;
+}
+.metric-label {
+    font-size: clamp(0.68rem, 2vw, 0.78rem);
+    color: #64748B;
+    margin-top: 3px;
+}
 
 /* الشارات */
-.badge-excellent { background: linear-gradient(135deg,#059669,#10B981); color:white; padding:5px 16px; border-radius:20px; font-size:0.8rem; font-weight:800; }
-.badge-good      { background: linear-gradient(135deg,#D97706,#F59E0B); color:white; padding:5px 16px; border-radius:20px; font-size:0.8rem; font-weight:800; }
-.badge-bad       { background: linear-gradient(135deg,#DC2626,#EF4444); color:white; padding:5px 16px; border-radius:20px; font-size:0.8rem; font-weight:800; }
+.badge-excellent { background: linear-gradient(135deg,#059669,#10B981); color:white; padding:5px 16px; border-radius:20px; font-size:0.82rem; font-weight:800; }
+.badge-good      { background: linear-gradient(135deg,#D97706,#F59E0B); color:white; padding:5px 16px; border-radius:20px; font-size:0.82rem; font-weight:800; }
+.badge-bad       { background: linear-gradient(135deg,#DC2626,#EF4444); color:white; padding:5px 16px; border-radius:20px; font-size:0.82rem; font-weight:800; }
 
-/* أوقات الصيد */
+/* شريط النشاط */
+.activity-bar-wrap { background:#0A1628; border-radius:8px; height:16px; overflow:hidden; margin:10px 0 4px 0; }
+.activity-bar-fill { height:100%; border-radius:8px; transition: width 0.5s ease; }
+.activity-labels { display:flex; justify-content:space-between; font-size:0.72rem; color:#475569; direction:rtl; margin-top:3px; }
+
+/* شرائح ساعات الصيد */
 .range-chip {
-    display: inline-block; background: linear-gradient(135deg, #0369A1, #0EA5E9);
-    color: white; font-weight: 800; font-size: 0.85rem; padding: 5px 14px;
-    border-radius: 22px; margin: 4px 0 4px 6px; box-shadow: 0 2px 8px rgba(14,165,233,0.35);
+    display: inline-block;
+    background: linear-gradient(135deg, #0369A1, #0EA5E9);
+    color: white;
+    font-weight: 800;
+    font-size: clamp(0.75rem, 2.2vw, 0.85rem);
+    padding: 5px 14px;
+    border-radius: 22px;
+    margin: 4px 0 4px 6px;
+    box-shadow: 0 2px 8px rgba(14,165,233,0.35);
+    white-space: nowrap;
 }
 
-/* Solunar Columns */
-.solunar-wrap { display: flex; gap: 12px; direction: rtl; margin-bottom: 16px; }
-.solunar-col { flex: 1; border-radius: 16px; padding: 16px 14px; text-align: center; }
-.solunar-major { background: rgba(56,189,248,0.05); border: 1px solid rgba(56,189,248,0.2); }
-.solunar-minor { background: rgba(167,139,250,0.05); border: 1px solid rgba(167,139,250,0.2); }
-.solunar-h { font-size: 0.8rem; font-weight: 800; margin-bottom: 8px; }
-.sol-v { font-size: 0.95rem; font-weight: 800; color: #F1F5F9; }
+/* النصائح */
+.advice-excellent { color:#10B981; font-weight:700; text-align:right; font-size:0.9rem; margin-top:10px; line-height:1.6; }
+.advice-good      { color:#F59E0B; font-weight:700; text-align:right; font-size:0.9rem; margin-top:10px; line-height:1.6; }
+.advice-bad       { color:#EF4444; font-weight:700; text-align:right; font-size:0.9rem; margin-top:10px; line-height:1.6; }
 
-/* Activity Gauge */
-.act-ring-wrap { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px; }
-.act-ring-score { font-size: 2.5rem; font-weight: 900; color: #F1F5F9; line-height: 1; }
+/* صف العوامل */
+.factor-row { display:flex; gap:8px; margin-top:14px; direction:rtl; flex-wrap:wrap; }
+.factor-box { flex:1; min-width:70px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:10px; padding:10px 6px; text-align:center; }
+.factor-label { font-size:0.72rem; color:#64748B; margin-top:4px; }
+.factor-value { font-size:0.9rem; font-weight:800; }
+
+/* المخطط */
+[data-testid="stVegaLiteChart"] { border-radius:12px !important; overflow:hidden !important; }
+
+/* التنسيق الخاص بقوالب صفحة الويب */
+.tide-event-chip {
+    flex: 1;
+    min-width: 100px;
+    border-radius: 12px;
+    padding: 9px 10px;
+    text-align: center;
+    border: 1px solid;
+}
+.tide-event-chip .ev-icon { font-size: 1.1rem; }
+.tide-event-chip .ev-label { font-size: 0.68rem; color: #94A3B8; margin-top: 1px; }
+.tide-event-chip .ev-time { font-size: 0.9rem; font-weight: 800; margin-top: 2px; }
+.tide-event-chip .ev-height { font-size: 0.72rem; margin-top: 1px; font-weight: 600; }
+
+/* الفوتر */
+.footer { text-align:center; color:#1E3A5F; font-size:0.72rem; margin-top:24px; padding-top:16px; border-top:1px solid #1E293B; }
+
+/* ── مؤشر النشاط الدائري Premium ── */
+.act-ring-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 10px 10px 10px;
+}
+.act-ring-inner {
+    position: relative;
+    width: 160px;
+    height: 160px;
+}
+.act-ring-inner svg { transform: rotate(-90deg); }
+.act-ring-center {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    pointer-events: none;
+}
+.act-ring-score {
+    font-size: 2.4rem;
+    font-weight: 900;
+    color: #F1F5F9;
+    line-height: 1;
+}
+.act-ring-label {
+    font-size: 0.72rem;
+    color: #64748B;
+    margin-top: 4px;
+}
+.act-ring-stars {
+    font-size: 1.1rem;
+    margin-top: 10px;
+    letter-spacing: 3px;
+}
+.act-ring-status {
+    font-size: 1rem;
+    font-weight: 800;
+    margin-top: 6px;
+}
+
+/* ── مخطط نشاط ساعي ── */
+.chart-label {
+    color: #38BDF8;
+    font-size: clamp(0.95rem, 2.8vw, 1.05rem);
+    font-weight: 800;
+    text-align: right;
+    margin: 16px 0 6px 0;
+}
+.chart-legend {
+    display: flex;
+    gap: 14px;
+    direction: rtl;
+    margin-bottom: 6px;
+    font-size: 0.75rem;
+    color: #64748B;
+}
+.chart-legend span { display:flex; align-items:center; gap:5px; }
+.chart-legend i { display:inline-block; width:12px; height:3px; border-radius:2px; }
+
+/* ── أوقات الصيد السولونار ── */
+.solunar-wrap {
+    display: flex;
+    gap: 12px;
+    direction: rtl;
+    margin-bottom: 16px;
+}
+.solunar-col {
+    flex: 1;
+    border-radius: 16px;
+    padding: 16px 14px;
+}
+.solunar-major { background: linear-gradient(145deg, #0c2a4a, #0a1e38); border: 1px solid rgba(56,189,248,0.35); }
+.solunar-minor { background: linear-gradient(145deg, #1a1f35, #111827); border: 1px solid rgba(167,139,250,0.25); }
+.solunar-heading {
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    text-align: center;
+}
+.solunar-major .solunar-heading { color: #38BDF8; }
+.solunar-minor .solunar-heading { color: #A78BFA; }
+.solunar-icon { font-size: 1.6rem; text-align: center; margin-bottom: 8px; }
+.sol-chip {
+    border-radius: 10px;
+    padding: 9px 10px;
+    margin: 7px 0;
+    text-align: center;
+    font-weight: 700;
+    font-size: 0.88rem;
+    line-height: 1.4;
+}
+.sol-chip-major { background: rgba(56,189,248,0.12); border: 1px solid rgba(56,189,248,0.3); color: #E0F2FE; }
+.sol-chip-minor { background: rgba(167,139,250,0.10); border: 1px solid rgba(167,139,250,0.25); color: #EDE9FE; }
+.sol-chip-label { font-size: 0.65rem; color: #64748B; margin-top: 3px; }
+
+/* الاستجابة للجوال */
+@media (max-width: 480px) {
+    .block-container { padding: 0.6rem 0.6rem 2rem 0.6rem !important; }
+    .card { padding: 14px 12px; border-radius: 14px; }
+    .metric-row { gap: 6px; }
+    .factor-row { gap: 6px; }
+}
 </style>
 """, unsafe_allow_html=True)
 
-# ─── ثوابت ودوال مساعدة ───────────────────────────────────────────────────────
+# ─── ثوابت ────────────────────────────────────────────────────────────────────
 DAYS_AR   = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"]
-MONTHS_AR = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"]
+MONTHS_AR = ["يناير","فبراير","مارس","أبريل","مايو","يونيو",
+             "يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"]
 
 def _day_option_label(offset: int) -> str:
     d = datetime.now() + timedelta(days=offset)
-    day_name = DAYS_AR[(d.weekday() + 1) % 7]
     day_str = f"{d.day} {MONTHS_AR[d.month - 1]}"
-    if offset == 0: return f"اليوم ({day_str})"
-    return f"{day_name} ({day_str})"
+    if offset == 0:
+        return f"اليوم ({day_str})"
+    elif offset == 1:
+        return f"{DAYS_AR[(d.weekday() + 1) % 7]} ({day_str})"
+    else:
+        return f"{DAYS_AR[(d.weekday() + 1) % 7]} ({day_str})"
 
-def fmt_12h(h: int) -> str:
-    h_wrapped = h % 24
-    period = "ص" if h_wrapped < 12 else "م"
-    h12 = h_wrapped % 12 or 12
-    return f"{h12}:00 {period}"
-
-# ─── نموذج نشاط الأسماك والمد والجزر ──────────────────────────────────────────
-def fish_activity_score(wind, wave, temp):
+# ─── نموذج نشاط الأسماك ───────────────────────────────────────────────────────
+def fish_activity_score(wind: float, wave: float, temp: float, swell: float = 0.0) -> dict:
     score = 100
-    if wind > 18: score -= 40
-    elif wind > 12: score -= 15
-    if wave > 0.7: score -= 35
-    elif wave > 0.4: score -= 15
-    score = max(5, min(100, score))
-    if score >= 65: return {"score": score, "label": "نشاط عالي 🎣", "color": "#10B981", "adv": "ظروف مثالية للصيد!"}
-    if score >= 35: return {"score": score, "label": "نشاط متوسط 🐟", "color": "#F59E0B", "adv": "تحتاج قليل من الصبر."}
-    return {"score": score, "label": "نشاط منخفض ⚠️", "color": "#EF4444", "adv": "البحر هائج أو الرياح شديدة."}
 
-def _tide_amplitudes(lat, lon):
-    return dict(M2=0.90, S2=0.28, K1=0.12, O1=0.08, base=1.10) # نموذج مبسط للجبيل
+    # تقييم الرياح
+    if wind <= 10:
+        w_status, w_label = "#10B981", "مثالي"
+    elif wind <= 18:
+        w_status, w_label = "#F59E0B", "مقبول"
+        score -= 20
+    else:
+        w_status, w_label = "#EF4444", "شديد"
+        score -= 50
 
-def compute_tide_profile(lat, lon, for_date):
+    # تقييم الموج
+    if wave <= 0.3:
+        wv_status, wv_label = "#10B981", "هادئ"
+    elif wave <= 0.7:
+        wv_status, wv_label = "#F59E0B", "خفيف"
+        score -= 15
+    else:
+        wv_status, wv_label = "#EF4444", "عالي"
+        score -= 45
+
+    # تقييم الحرارة
+    if 22 <= temp <= 30:
+        t_status, t_label = "#10B981", "مثالية"
+    elif 18 <= temp <= 36:
+        t_status, t_label = "#F59E0B", "مقبولة"
+        score -= 5
+    else:
+        t_status, t_label = "#EF4444", "قاسية"
+        score -= 20
+
+    # تأثير التورم البحري
+    if swell > 1.5:
+        score -= 15
+
+    score = max(0, min(100, score))
+
+    if score >= 65:
+        level, label, color = "high", "نشاط عالي 🎣", "#10B981"
+        advice = "ظروف مثالية — الأسماك نشيطة وقريبة من السطح. أنسب وقت للمحادق وصيد السيف!"
+    elif score >= 35:
+        level, label, color = "medium", "نشاط متوسط 🐟", "#F59E0B"
+        advice = "ظروف مقبولة — الأسماك نشيطة جزئياً. الصيد ممكن مع بعض الصبر."
+    else:
+        level, label, color = "low", "نشاط منخفض ⚠️", "#EF4444"
+        advice = "ظروف صعبة — الأسماك في الأعماق والبحر غير مناسب حالياً."
+
+    return {
+        "level": level, "label": label, "color": color, "score": score, "advice": advice,
+        "wind_status": w_status, "wind_label": w_label,
+        "wave_status": wv_status, "wave_label": wv_label,
+        "temp_status": t_status, "temp_label": t_label,
+    }
+
+# ─── تجميع الساعات وإصلاح نظام الـ 24 ساعة المتقدم ────────────────────────────
+def build_time_ranges(good_hours: list) -> list:
+    if not good_hours:
+        return []
+    ranges = []
+    start = good_hours[0]
+    end = good_hours[0]
+    for h in good_hours[1:]:
+        if h == end + 1:
+            end = h
+        else:
+            ranges.append((start, end))
+            start = end = h
+    ranges.append((start, end))
+
+    chips = []
+    for s, e in ranges:
+        def fmt(h):
+            h_wrapped = h % 24
+            period = "ص" if h_wrapped < 12 else "م"
+            h12 = h_wrapped % 12 or 12
+            return f"{h12}:00 {period}"
+        
+        if s == e:
+            chips.append(fmt(s))
+        else:
+            chips.append(f"{fmt(s)} — {fmt(e + 1)}")
+    return chips
+
+# ─── نموذج المد والجزر التوافقي (Harmonic Tidal Model) ───────────────────────
+def _tide_amplitudes(lat: float, lon: float) -> dict:
+    结构_gulf     = (23 <= lat <= 30) and (48 <= lon <= 57)
+    结构_red_sea  = (12 <= lat <= 28) and (32 <= lon <= 44)
+    结构_oman     = (22 <= lat <= 26) and (57 <= lon <= 62)
+
+    if 结构_gulf:
+        return dict(M2=0.90, S2=0.28, K1=0.12, O1=0.08, M4=0.06, base=1.10)
+    elif 结构_red_sea:
+        return dict(M2=0.28, S2=0.10, K1=0.18, O1=0.12, M4=0.02, base=0.45)
+    elif 结构_oman:
+        return dict(M2=0.65, S2=0.22, K1=0.20, O1=0.14, M4=0.04, base=0.80)
+    else:
+        return dict(M2=0.60, S2=0.20, K1=0.18, O1=0.12, M4=0.03, base=0.75)
+
+
+def compute_tide_profile(lat: float, lon: float, for_date: datetime) -> list:
     amp = _tide_amplitudes(lat, lon)
-    t_start = (for_date.replace(hour=0) - datetime(2000, 1, 1)).total_seconds() / 3600.0
-    periods = dict(M2=12.42, S2=12.00, K1=23.93, O1=25.82)
+    ref = datetime(2000, 1, 1, 0, 0, 0)
+    midnight = for_date.replace(hour=0, minute=0, second=0, microsecond=0)
+    t0 = (midnight - ref).total_seconds() / 3600.0
+
+    periods = dict(M2=12.4206, S2=12.0000, K1=23.9345, O1=25.8194, M4=6.2103)
+    phases  = dict(M2=0.0, S2=1.05, K1=0.80, O1=0.55, M4=2.20)
+
     heights = []
     for h in range(25):
-        t = t_start + h
-        val = amp["base"]
+        t = t0 + h
+        level = amp["base"]
         for name, period in periods.items():
-            val += amp.get(name, 0.1) * math.cos(2 * math.pi * t / period)
-        heights.append(round(max(0.1, val), 2))
+            omega = 2.0 * math.pi / period
+            level += amp[name] * math.cos(omega * t - phases[name])
+        heights.append(round(max(0.0, level), 3))
     return heights
 
-# ─── واجهة المستخدم الرئيسية ─────────────────────────────────────────────────
-st.markdown('<h1 style="color:#38BDF8;text-align:center;font-weight:900;">🌊 MARINE TRACKER PRO</h1>', unsafe_allow_html=True)
-st.markdown('<div style="width:50px;height:4px;background:#38BDF8;margin:10px auto 20px;"></div>', unsafe_allow_html=True)
 
-if "coords" not in st.session_state: st.session_state["coords"] = (26.9239, 49.8681)
+def find_tide_events(heights: list) -> dict:
+    highs, lows = [], []
+    for i in range(1, len(heights) - 1):
+        prev, curr, nxt = heights[i - 1], heights[i], heights[i + 1]
+        if curr >= prev and curr >= nxt and curr > heights[i - 1] + 0.01:
+            highs.append((i, curr))
+        elif curr <= prev and curr <= nxt and curr < heights[i - 1] - 0.01:
+            lows.append((i, curr))
+    return {"highs": highs, "lows": lows}
 
-# الخريطة (Google Maps Satellite Hybrid)
-st.markdown('<div class="map-section-label">🗺️ خريطة جوجل التفاعلية</div>', unsafe_allow_html=True)
-m = folium.Map(
-    location=st.session_state["coords"], zoom_start=12,
-    tiles="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
-    attr="Google Maps Satellite Hybrid"
+
+def fmt_tide_hour(h: int) -> str:
+    period = "ص" if h < 12 else "م"
+    h12 = h % 12 or 12
+    return f"{h12}:00 {period}"
+
+
+# ─── حساب طور القمر الفلكي ────────────────────────────────────────────────────
+def get_moon_phase(date: datetime) -> dict:
+    synodic = 29.53059
+    ref_jdn  = 2451549.26
+
+    y, m, d = date.year, date.month, date.day
+    a = (14 - m) // 12
+    yy = y + 4800 - a
+    mm = m + 12 * a - 3
+    jdn = (d + (153 * mm + 2) // 5 + 365 * yy
+           + yy // 4 - yy // 100 + yy // 400 - 32045
+           + (date.hour - 12) / 24.0)
+
+    age = (jdn - ref_jdn) % synodic
+    illumination = int(round((1 - math.cos(2 * math.pi * age / synodic)) / 2 * 100))
+
+    days_to_full = (14.765 - age) % synodic
+    days_to_new  = (synodic  - age) % synodic
+
+    if age < 1.85:
+        emoji, phase_ar = "🌑", "محاق — قمر جديد"
+        tidal, tidal_c   = "مدّ ربيعي قوي 💪", "#10B981"
+        tip = "أفضل وقت للصيد: المياه مظلمة والأسماك تتغذى بجرأة قرب السطح."
+        tip_color = "#10B981"
+    elif age < 7.38:
+        emoji, phase_ar = "🌒", "هلال متصاعد"
+        tidal, tidal_c   = "مدّ معتدل متصاعد", "#F59E0B"
+        tip = "نشاط جيد: الأسماك في حالة بحث نشط عن الغذاء بعد المحاق."
+        tip_color = "#F59E0B"
+    elif age < 9.22:
+        emoji, phase_ar = "🌓", "تربيع أول"
+        tidal, tidal_c   = "مدّ محاقي ضعيف", "#94A3B8"
+        tip = "نشاط متوسط: المدّ هادئ ومستقر، مناسب للصيد في الأعماق."
+        tip_color = "#94A3B8"
+    elif age < 14.76:
+        emoji, phase_ar = "🌔", "أحدب متصاعد"
+        tidal, tidal_c   = "مدّ متصاعد نحو الربيعي", "#F59E0B"
+        tip = "نشاط متزايد: الأسماك تستعد لذروة نشاطها عند اكتمال البدر."
+        tip_color = "#F59E0B"
+    elif age < 14.76:
+        emoji, phase_ar = "🌕", "بدر — قمر كامل"
+        tidal, tidal_c   = "مدّ ربيعي قوي 💪", "#10B981"
+        tip = "ذروة النشاط 🎣: أفضل ليلة للصيد! تيارات قوية والأسماك في أقصى نشاطها."
+        tip_color = "#10B981"
+    elif age < 22.15:
+        emoji, phase_ar = "🌖", "أحدب متناقص"
+        tidal, tidal_c   = "مدّ متناقص تدريجياً", "#F59E0B"
+        tip = "نشاط جيد: القمر لا يزال مضيئاً والأسماك نشيطة."
+        tip_color = "#F59E0B"
+    elif age < 23.99:
+        emoji, phase_ar = "🌗", "تربيع أخير"
+        tidal, tidal_c   = "مدّ محاقي ضعيف", "#94A3B8"
+        tip = "نشاط معتدل: المدّ محاقي هادئ، أفضل للصيد الصباحي الهادئ."
+        tip_color = "#94A3B8"
+    else:
+        emoji, phase_ar = "🌘", "هلال متناقص"
+        tidal, tidal_c   = "مدّ ضعيف يتراجع", "#64748B"
+        tip = "نشاط منخفض: القمر في تراجعه الأخير نحو المحاق القادم."
+        tip_color = "#64748B"
+
+    return {
+        "age": age, "illumination": illumination, "emoji": emoji,
+        "phase_ar": phase_ar, "tidal": tidal, "tidal_color": tidal_c,
+        "tip": tip, "tip_color": tip_color,
+        "days_to_full": days_to_full, "days_to_new": days_to_new,
+    }
+
+
+# ─── حساب أوقات الصيد السولونار ──────────────────────────────────────────────
+def compute_solunar_times(moon_age: float, lon: float) -> dict:
+    synodic = 29.53059
+    moon_transit_utc = (12.0 + moon_age * (24.0 * 50.0 / (60.0 * synodic))) % 24.0
+    tz_offset = 3
+    moon_transit_local = (moon_transit_utc + tz_offset + lon / 15.0) % 24.0
+
+    major1_c = moon_transit_local
+    major2_c = (moon_transit_local + 12.417) % 24.0
+    minor1_c = (moon_transit_local + 6.208) % 24.0
+    minor2_c = (moon_transit_local + 18.625) % 24.0
+
+    def fmt_h(h):
+        h = h % 24
+        period = "ص" if h < 12 else "م"
+        h12 = int(h) % 12 or 12
+        mins = int(round((h % 1) * 60))
+        return f"{h12}:{mins:02d} {period}" if mins else f"{h12}:00 {period}"
+
+    def time_range(center, dur):
+        s = (center - dur / 2) % 24
+        e = (center + dur / 2) % 24
+        return f"{fmt_h(s)} — {fmt_h(e)}"
+
+    return {
+        "major": [time_range(major1_c, 2), time_range(major2_c, 2)],
+        "minor": [time_range(minor1_c, 1), time_range(minor2_c, 1)],
+    }
+
+
+# ─── جلب البيانات من الـ APIs بدقة عالية ─────────────────────────────────────
+@st.cache_data(ttl=1800)
+def fetch_weather(lat: float, lon: float):
+    w_url = "https://api.open-meteo.com/v1/forecast"
+    m_url = "https://marine-api.open-meteo.com/v1/marine"
+
+    w_params = {
+        "latitude": lat, "longitude": lon,
+        "hourly": (
+            "temperature_2m,apparent_temperature,"
+            "windspeed_10m,winddirection_10m,"
+            "windgusts_10m,precipitation_probability,"
+            "visibility,cloudcover"
+        ),
+        "daily": (
+            "windspeed_10m_max,windgusts_10m_max,"
+            "temperature_2m_max,temperature_2m_min,"
+            "precipitation_probability_max"
+        ),
+        "wind_speed_unit": "kmh",
+        "forecast_days": 7,
+        "timezone": "Asia/Riyadh",
+        "models": "best_match",
+    }
+
+    m_params = {
+        "latitude": lat, "longitude": lon,
+        "hourly": (
+            "wave_height,wave_direction,wave_period,"
+            "wind_wave_height,wind_wave_period,"
+            "swell_wave_height,swell_wave_period,swell_wave_direction,"
+            "sea_surface_temperature"
+        ),
+        "daily": (
+            "wave_height_max,wave_period_max,"
+            "swell_wave_height_max,wind_wave_height_max"
+        ),
+        "forecast_days": 7,
+        "timezone": "Asia/Riyadh",
+        "length_unit": "metric",
+        "models": "best_match",
+    }
+
+    try:
+        w_res = requests.get(w_url, params=w_params, timeout=12).json()
+        m_res = requests.get(m_url, params=m_params, timeout=12).json()
+        return w_res, m_res
+    except Exception as e:
+        return None, None
+
+@st.cache_data(ttl=3600)
+def get_location_name(lat: float, lon: float) -> str:
+    try:
+        res = requests.get(
+            f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json&accept-language=ar",
+            headers={"User-Agent": "MarineTrackerPRO/2.0"},
+            timeout=4
+        ).json()
+        addr = res.get("address", {})
+        return (
+            addr.get("city") or addr.get("town") or
+            addr.get("village") or addr.get("state") or
+            "منطقة بحرية مفتوحة"
+        )
+    except:
+        return "منطقة بحرية"
+
+# ─── واجهة المستخدم ───────────────────────────────────────────────────────────
+st.markdown('<h1 class="main-title">🌊 MARINE TRACKER</h1>', unsafe_allow_html=True)
+st.markdown('<p class="sub-title">المرشد البحري الذكي لرحلات الصيد</p>', unsafe_allow_html=True)
+st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+
+# إدارة حالة الجلسة
+if "coords" not in st.session_state:
+    st.session_state["coords"] = (26.9239, 49.8681)  # الجبيل الساحلية
+if "pending_coords" not in st.session_state:
+    st.session_state["pending_coords"] = None
+
+# معالجة التحديث المعلق
+if st.session_state["pending_coords"] is not None:
+    st.session_state["coords"] = st.session_state["pending_coords"]
+    st.session_state["pending_coords"] = None
+
+flat, flon = st.session_state["coords"] if st.session_state["coords"] else (26.85, 49.80)
+
+# مربع الموقع
+if st.session_state["coords"]:
+    display_text = f"📍 الموقع المحدد: {get_location_name(flat, flon)} ({flat:.3f}°، {flon:.3f}°)"
+else:
+    display_text = "📍 انقر على الخريطة لتحديد موقعك البحري"
+
+st.markdown(f'<div class="location-box">{display_text}</div>', unsafe_allow_html=True)
+
+# ─── منتقي الأيام السبعة ──────────────────────────────────────────────────────
+_day_options = [_day_option_label(i) for i in range(7)]
+_selected_day = st.segmented_control(
+    label="اختر اليوم",
+    options=_day_options,
+    default=_day_options[0],
+    label_visibility="collapsed",
 )
-folium.Marker(st.session_state["coords"], icon=folium.Icon(color="blue", icon="anchor", prefix="fa")).add_to(m)
+day_offset = _day_options.index(_selected_day) if _selected_day in _day_options else 0
 
-map_res = st_folium(m, height=350, use_container_width=True, key="google_map")
-if map_res and map_res.get("last_clicked"):
-    st.session_state["coords"] = (map_res["last_clicked"]["lat"], map_res["last_clicked"]["lng"])
-    st.rerun()
+# ─── الخريطة ──────────────────────────────────────────────────────────────────
+st.markdown('<div class="map-section-label">🗺️ خريطة الصيد التفاعلية</div>', unsafe_allow_html=True)
 
-# اختيار التاريخ
-_day_opts = [_day_option_label(i) for i in range(7)]
-sel_day = st.segmented_control("اليوم", options=_day_opts, default=_day_opts[0], label_visibility="collapsed")
-offset = _day_opts.index(sel_day)
+m = folium.Map(
+    location=[26.9239, 49.8681],
+    zoom_start=11,
+    tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    attr="Esri World Imagery",
+    prefer_canvas=True,
+)
 
-# جلب البيانات (Open-Meteo)
-lat, lon = st.session_state["coords"]
-w_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&hourly=temperature_2m,windspeed_10m&timezone=Asia/Riyadh"
-m_url = f"https://marine-api.open-meteo.com/v1/marine?latitude={lat}&longitude={lon}&hourly=wave_height&timezone=Asia/Riyadh"
+# حقن CSS لمنع انعكاس الخريطة والمحافظة على الـ LTR فيها
+m.get_root().html.add_child(folium.Element("""
+<style>
+html, body,
+.leaflet-container,
+.leaflet-pane,
+.leaflet-map-pane,
+.leaflet-tile-pane,
+.leaflet-overlay-pane,
+.leaflet-marker-pane,
+.leaflet-popup-pane,
+.leaflet-tooltip-pane,
+.leaflet-tile {
+    direction: ltr !important;
+    text-align: left !important;
+    unicode-bidi: normal !important;
+}
+</style>
+"""))
 
-try:
-    weather = requests.get(w_url).json()["hourly"]
-    marine = requests.get(m_url).json()["hourly"]
-    idx = (offset * 24) + datetime.now().hour
-    
-    t_now = weather["temperature_2m"][idx]
-    w_now = weather["windspeed_10m"][idx]
-    wv_now = marine["wave_height"][idx]
-    
-    # بطاقة الأحوال
-    st.markdown(f"""
-    <div class="card">
-        <div class="card-title">📊 الأحوال الحالية — الجبيل</div>
-        <div class="metric-row">
-            <div class="metric-box"><div class="metric-value">{t_now:.0f}°م</div><div class="metric-label">الحرارة</div></div>
-            <div class="metric-box"><div class="metric-value">{w_now:.0f} ك/س</div><div class="metric-label">الرياح</div></div>
-            <div class="metric-box"><div class="metric-value">{wv_now:.1f} م</div><div class="metric-label">الموج</div></div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+if st.session_state["coords"]:
+    folium.Marker(
+        location=[flat, flon],
+        icon=folium.Icon(color="blue", icon="anchor", prefix="fa"),
+        tooltip="موقعك المحدد"
+    ).add_to(m)
+    folium.Circle(
+        location=[flat, flon],
+        radius=5000,
+        color="#38BDF8",
+        fill=True,
+        fill_color="#38BDF8",
+        fill_opacity=0.10,
+        weight=2,
+    ).add_to(m)
 
-    # مؤشر النشاط
-    act = fish_activity_score(w_now, wv_now, t_now)
-    score, color = act["score"], act["color"]
-    radius = 65; circ = 2 * math.pi * radius; filled = circ * score / 100
-    st.markdown(f"""
-    <div class="card">
-        <div class="card-title">🐠 مؤشر نشاط الصيد</div>
-        <div style="display:flex;align-items:center;justify-content:space-around;direction:rtl;">
-            <div class="act-ring-wrap">
-                <svg width="150" height="150" style="transform:rotate(-90deg);">
-                    <circle cx="75" cy="75" r="{radius}" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="12"/>
-                    <circle cx="75" cy="75" r="{radius}" fill="none" stroke="{color}" stroke-width="12" stroke-dasharray="{filled} {circ}" stroke-linecap="round"/>
-                </svg>
-                <div style="position:absolute;text-align:center;">
-                    <div class="act-ring-score">{score}</div>
-                    <div style="font-size:0.8rem;color:#64748B;">/ 100</div>
+map_data = st_folium(m, height=400, use_container_width=True, key="marine_map", returned_objects=["last_clicked"])
+
+# التقاط النقرات بشكل آمن
+if map_data and map_data.get("last_clicked"):
+    nl_lat = round(map_data["last_clicked"]["lat"], 5)
+    nl_lng = round(map_data["last_clicked"]["lng"], 5)
+    new_coords = (nl_lat, nl_lng)
+    if st.session_state["coords"] != new_coords:
+        st.session_state["pending_coords"] = new_coords
+        st.rerun()
+
+# ─── التحليلات ────────────────────────────────────────────────────────────────
+if st.session_state["coords"]:
+    w_res, m_res = fetch_weather(flat, flon)
+
+    if w_res is None or m_res is None or "hourly" not in w_res or "hourly" not in m_res:
+        st.error("⚠️ تعذّر جلب البيانات. يرجى اختيار نقطة داخل البحر أو المحاولة لاحقاً.")
+    else:
+        try:
+            hw = w_res["hourly"]
+            hm = m_res["hourly"]
+
+            total_hours = len(hw.get("temperature_2m", []))
+            curr_h  = datetime.now().hour
+            data_idx = min((day_offset * 24) + curr_h, total_hours - 1) if total_hours > 0 else 0
+
+            def safe_get(get_list, idx, default=0.0):
+                try:
+                    val = get_list[idx]
+                    return val if val is not None else default
+                except (IndexError, TypeError):
+                    return default
+
+            t_now       = safe_get(hw.get("temperature_2m", []), data_idx)
+            t_feels     = safe_get(hw.get("apparent_temperature", []), data_idx)
+            wind_now    = safe_get(hw.get("windspeed_10m", []), data_idx)
+            wind_gust   = safe_get(hw.get("windgusts_10m", []), data_idx)
+            wind_dir    = safe_get(hw.get("winddirection_10m", []), data_idx)
+            wave_now    = safe_get(hm.get("wave_height", []), data_idx)
+            wave_period = safe_get(hm.get("wave_period", []), data_idx)
+            swell_now   = safe_get(hm.get("swell_wave_height", []), data_idx)
+            sst         = safe_get(hm.get("sea_surface_temperature", []), data_idx)
+            precip_prob = safe_get(hw.get("precipitation_probability", []), data_idx)
+
+            # مسح الـ 24 ساعة بالكامل لصيد الفترتين الجيدتين للصيد
+            look_ahead = min(data_idx + 24, total_hours)
+            good_hours = [
+                i for i in range(data_idx, look_ahead)
+                if safe_get(hw.get("windspeed_10m", []), i) <= 15
+                and safe_get(hm.get("wave_height", []), i) <= 0.7
+                and safe_get(hw.get("precipitation_probability", []), i, 0) < 40
+            ]
+            time_ranges = build_time_ranges(good_hours)
+
+            # تحديد الحالة
+            if wind_now < 14 and wave_now < 0.5:
+                status, badge = "excellent", "badge-excellent"
+                adv = "الوضع ممتاز: بحر هادئ، الموج ساكن والرياح ركود. مثالي للصيد!"
+            elif wind_now < 22 and wave_now < 0.9:
+                status, badge = "good", "badge-good"
+                adv = "الوضع جيد: حركة موج خفيفة. الصيد مناسب مع الحذر."
+            else:
+                status, badge = "bad", "badge-bad"
+                adv = "الوضع صعب: موج عالٍ ورياح شديدة. يُنصح بتأجيل الرحلة."
+
+            status_ar = {"excellent": "ممتاز", "good": "جيد", "bad": "محظور"}
+
+            # ─── بطاقة الأحوال الحالية ────────────────────────────────────────
+            st.markdown(f"""
+            <div class="card">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+                <div class="card-title" style="margin-bottom:0">📊 الأحوال الحالية</div>
+                <span class="{badge}">{status_ar[status]}</span>
+              </div>
+              <div class="metric-row">
+                <div class="metric-box">
+                  <div class="metric-value">{t_now:.0f}°م</div>
+                  <div class="metric-label">الحرارة</div>
                 </div>
+                <div class="metric-box">
+                  <div class="metric-value">{t_feels:.0f}°م</div>
+                  <div class="metric-label">الحرارة المحسوسة</div>
+                </div>
+                <div class="metric-box">
+                  <div class="metric-value">{wind_now:.0f} كم/س</div>
+                  <div class="metric-label"> الرياح</div>
+                </div>
+                <div class="metric-box">
+                  <div class="metric-value">{wind_gust:.0f} كم/س</div>
+                  <div class="metric-label">أقصى هبّة</div>
+                </div>
+              </div>
+              <div class="metric-row">
+                <div class="metric-box">
+                  <div class="metric-value">{wave_now:.1f} م</div>
+                  <div class="metric-label">ارتفاع الموج</div>
+                </div>
+                <div class="metric-box">
+                  <div class="metric-value">{wave_period:.0f} ث</div>
+                  <div class="metric-label">دورة الموج</div>
+                </div>
+                <div class="metric-box">
+                  <div class="metric-value">{swell_now:.1f} م</div>
+                  <div class="metric-label">التورم البحري</div>
+                </div>
+                <div class="metric-box">
+                  <div class="metric-value">{sst:.1f}°م</div>
+                  <div class="metric-label">حرارة السطح</div>
+                </div>
+              </div>
+              <p class="advice-{status}">{adv}</p>
             </div>
-            <div style="text-align:right;">
-                <h3 style="color:{color};margin:0;">{act['label']}</h3>
-                <p style="color:#94A3B8;font-size:0.9rem;">{act['adv']}</p>
+            """, unsafe_allow_html=True)
+
+            # عرض النطاقات الزمنية المعدلة بشكل نظيف ومستقل تحت بطاقة الأحوال
+            if time_ranges:
+                chips_html = "".join(f'<span class="range-chip">{r}</span>' for r in time_ranges[:4])
+                st.markdown(f"""
+                <div style="margin-top:-8px; margin-bottom:16px; direction:rtl; text-align:right;">
+                  <span style="color:#94A3B8; font-size:0.85rem; margin-left:8px;">🕐 أفضل فترات الصيد القادمة خلال اليوم:</span>
+                  {chips_html}
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown("""
+                <div style="margin-top:-8px; margin-bottom:16px; color:#EF4444; font-size:0.85rem; text-align:right;">
+                  ⚠️ لا توجد فترات مناسبة للصيد خلال الـ 24 ساعة القادمة.
+                </div>
+                """, unsafe_allow_html=True)
+
+            # ─── بطاقة مؤشر النشاط الدائري Premium ──────────────────────────
+            act = fish_activity_score(wind_now, wave_now, t_now, swell_now)
+            score = act["score"]
+            color = act["color"]
+            radius = 68
+            circ  = 2 * math.pi * radius
+            filled = circ * score / 100
+            stars_full = int(round(score / 20))
+            stars_html = "★" * stars_full + "☆" * (5 - stars_full)
+            st.markdown(f"""
+            <div class="card">
+              <div class="card-title">🐠 مؤشر نشاط الأسماك — الجبيل</div>
+              <div style="display:flex;align-items:center;gap:24px;direction:rtl;flex-wrap:wrap;">
+                <div class="act-ring-wrap" style="flex:0 0 auto;">
+                  <div class="act-ring-inner">
+                    <svg width="160" height="160" viewBox="0 0 160 160">
+                      <circle cx="80" cy="80" r="{radius}" fill="none"
+                              stroke="rgba(255,255,255,0.06)" stroke-width="14"/>
+                      <circle cx="80" cy="80" r="{radius}" fill="none"
+                              stroke="{color}" stroke-width="14"
+                              stroke-linecap="round"
+                              stroke-dasharray="{filled:.1f} {circ:.1f}"/>
+                    </svg>
+                    <div class="act-ring-center">
+                      <div class="act-ring-score">{score}</div>
+                      <div class="act-ring-label">/ 100</div>
+                    </div>
+                  </div>
+                  <div class="act-ring-stars" style="color:#F59E0B;">{stars_html}</div>
+                  <div class="act-ring-status" style="color:{color};">{act['label']}</div>
+                </div>
+                <div style="flex:1;min-width:160px;text-align:right;">
+                  <div style="background:rgba(255,255,255,0.03);border-radius:10px;
+                              padding:12px;color:#CBD5E1;font-size:0.9rem;line-height:1.8;
+                              margin-bottom:12px;">
+                    {act['advice']}
+                  </div>
+                  <div class="factor-row">
+                    <div class="factor-box">
+                      <div class="factor-value" style="color:{act['wind_status']}">{act['wind_label']}</div>
+                      <div class="factor-label">الرياح</div>
+                    </div>
+                    <div class="factor-box">
+                      <div class="factor-value" style="color:{act['wave_status']}">{act['wave_label']}</div>
+                      <div class="factor-label">الموج</div>
+                    </div>
+                    <div class="factor-box">
+                      <div class="factor-value" style="color:{act['temp_status']}">{act['temp_label']}</div>
+                      <div class="factor-label">الحرارة</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
 
-    # 📉 منحنى المد والجزر (Plotly 12h)
-    tide_h = compute_tide_profile(lat, lon, datetime.now() + timedelta(days=offset))
-    labels_12h = [fmt_12h(h) for h in range(25)]
-    
-    fig = go.Figure()
-    # تلوين ليل/نهار
-    fig.add_vrect(x0=0, x1=5.5, fillcolor="#0A1628", opacity=0.4, line_width=0) # فجر
-    fig.add_vrect(x0=5.5, x1=18, fillcolor="#ECEFF1", opacity=0.1, line_width=0) # نهار
-    fig.add_vrect(x0=18, x1=24, fillcolor="#0A1628", opacity=0.4, line_width=0) # ليل
-    
-    fig.add_trace(go.Scatter(x=list(range(25)), y=tide_h, mode='lines', line=dict(color='#38BDF8', width=4, shape='spline'), text=labels_12h, hovertemplate='%{text}<br>الارتفاع: %{y}م'))
-    
-    if offset == 0: # الوقت الحالي
-        fig.add_vline(x=datetime.now().hour, line_width=2, line_color="#EF4444")
-        fig.add_annotation(x=datetime.now().hour, y=max(tide_h), text="الآن", showarrow=False, font=dict(color="#EF4444"))
+            # ─── مخطط النشاط الساعي ────────────────────────────────────────────
+            try:
+                day_start = day_offset * 24
+                day_end   = min(day_start + 24, total_hours)
+                hourly_scores = []
+                hour_labels   = []
+                for hi in range(day_start, day_end):
+                    hs = fish_activity_score(
+                        safe_get(hw.get("windspeed_10m", []), hi),
+                        safe_get(hm.get("wave_height", []), hi),
+                        safe_get(hw.get("temperature_2m", []), hi),
+                        safe_get(hm.get("swell_wave_height", []), hi),
+                    )["score"]
+                    hourly_scores.append(hs)
+                    h_local = hi % 24
+                    period = "ص" if h_local < 12 else "م"
+                    h12 = h_local % 12 or 12
+                    hour_labels.append(f"{h12}{period}")
 
-    fig.update_layout(
-        margin=dict(l=10, r=10, t=10, b=10), height=220, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(tickmode='array', tickvals=[0, 6, 12, 18, 24], ticktext=['12 ص', '6 ص', '12 م', '6 م', '12 ص'], gridcolor='rgba(255,255,255,0.05)', tickfont=dict(color='#64748B')),
-        yaxis=dict(showgrid=False, tickfont=dict(color='#64748B'))
-    )
-    st.markdown('<div class="map-section-label">📉 منحنى المد والجزر (نظام 12 ساعة)</div>', unsafe_allow_html=True)
-    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+                act_chart_df = pd.DataFrame(
+                    {"نشاط الأسماك (%)": hourly_scores},
+                    index=hour_labels,
+                )
+                st.markdown(
+                    '<div class="chart-label">📈 مستوى نشاط الأسماك خلال اليوم</div>',
+                    unsafe_allow_html=True
+                )
+                st.markdown("""
+                <div class="chart-legend">
+                  <span><i style="background:#10B981;"></i>عالي (65+)</span>
+                  <span><i style="background:#F59E0B;"></i>متوسط (35–65)</span>
+                  <span><i style="background:#EF4444;"></i>منخفض (&lt;35)</span>
+                </div>
+                """, unsafe_allow_html=True)
+                st.area_chart(
+                    act_chart_df,
+                    height=190,
+                    use_container_width=True,
+                    color=["#10B981"],
+                )
+            except Exception:
+                pass
 
-    # أوقات الصيد (Solunar)
-    st.markdown("""
-    <div class="card">
-        <div class="card-title">⏱️ أوقات الصيد المثلى (Solunar)</div>
-        <div class="solunar-wrap">
-            <div class="solunar-col solunar-major">
-                <div class="solunar-h" style="color:#38BDF8;">MAJOR TIMES</div>
-                <div class="sol-v">05:20 ص - 07:20 ص</div>
-                <div class="sol-v">05:45 م - 07:45 م</div>
-            </div>
-            <div class="solunar-col solunar-minor">
-                <div class="solunar-h" style="color:#A78BFA;">MINOR TIMES</div>
-                <div class="sol-v">11:10 ص - 12:10 م</div>
-                <div class="sol-v">11:30 م - 12:30 ص</div>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+            # ─── معالجة الحسابات للمنحنى البياني ───
+            try:
+                target_date  = datetime.now() + timedelta(days=day_offset)
+                tide_heights = compute_tide_profile(flat, flon, target_date)
+                curr_tide_h  = min(curr_h, 24)
 
-except Exception as e:
-    st.error("يرجى اختيار نقطة بحرية واضحة (خارج اليابسة) لجلب البيانات.")
+                tide_chart_data = pd.DataFrame(
+                    {"المد (م)": [float(v) for v in tide_heights]},
+                    index=list(range(25)),
+                )
+
+                st.markdown(
+                    '<div class="map-section-label" style="margin-top:4px;">📉 منحنى المد والجزر — 24 ساعة</div>',
+                    unsafe_allow_html=True
+                )
+                st.line_chart(
+                    tide_chart_data,
+                    height=175,
+                    use_container_width=True,
+                    color=["#38BDF8"],
+                )
+                st.markdown(
+                    f'<div style="text-align:right;font-size:0.72rem;color:#475569;margin-top:2px;">'
+                    f'المحور الأفقي: ساعات اليوم (0–24) &nbsp;|&nbsp; '
+                    f'<span style="color:#38BDF8;">■</span> منسوب المد &nbsp;'
+                    f'| الساعة الحالية: {fmt_tide_hour(curr_tide_h)}'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+
+            except Exception:
+                pass
+
+            # ─── بطاقة القمر ──────────────────────────────────────────────────
+            try:
+                moon = get_moon_phase(datetime.now() + timedelta(days=day_offset))
+                dtf  = round(moon["days_to_full"], 1)
+                dtn  = round(moon["days_to_new"],  1)
+                next_full_label = f"{dtf} يوم" if dtf > 1 else "الليلة!"
+                next_new_label  = f"{dtn} ocean" if dtn > 1 else "الليلة!"
+
+                st.markdown(f"""
+                <div class="card">
+                  <div class="card-title">🌙 حالة القمر وتأثيره على الصيد</div>
+                  <div class="moon-row">
+                    <div class="moon-emoji-wrap">{moon["emoji"]}</div>
+                    <div class="moon-info">
+                      <div class="moon-phase-name">{moon["phase_ar"]}</div>
+                      <div class="moon-illum">
+                        الإضاءة: <strong style="color:#F1F5F9;">{moon["illumination"]}%</strong>
+                        &nbsp;|&nbsp; عمر القمر: <strong style="color:#F1F5F9;">{moon["age"]:.1f}</strong> يوم
+                      </div>
+                      <div style="margin-top:8px;">
+                        <span style="background:{moon["tidal_color"]}22;color:{moon["tidal_color"]};
+                                     border:1px solid {moon["tidal_color"]}55;border-radius:16px;
+                                     padding:3px 12px;font-size:0.78rem;font-weight:800;">
+                          {moon["tidal"]}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="moon-events-row">
+                    <div class="moon-event-box">
+                      <div class="moon-event-label">🌕 حتى البدر القادم</div>
+                      <div class="moon-event-val">{next_full_label}</div>
+                    </div>
+                    <div class="moon-event-box">
+                      <div class="moon-event-label">🌑 حتى المحاق القادم</div>
+                      <div class="moon-event-val">{next_new_label}</div>
+                    </div>
+                    <div class="moon-event-box">
+                      <div class="moon-event-label">📅 الدورة القمرية</div>
+                      <div class="moon-event-val">29.5 يوم</div>
+                    </div>
+                  </div>
+                  <div class="moon-tip" style="border-right-color:{moon["tip_color"]};">
+                    {moon["tip"]}
+                  </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                # ─── أوقات الصيد الرئيسية والثانوية (سولونار) ──────────────
+                sol = compute_solunar_times(moon["age"], flon)
+                st.markdown(f"""
+                <div class="card" style="margin-top:0;">
+                  <div class="card-title">⏱️ أوقات الصيد المثلى — سولونار</div>
+                  <div class="solunar-wrap">
+                    <div class="solunar-col solunar-major">
+                      <div class="solunar-icon">🌊</div>
+                      <div class="solunar-heading">MAJOR TIMES</div>
+                      <div class="sol-chip sol-chip-major">
+                        {sol["major"][0]}
+                        <div class="sol-chip-label">نشاط عالي جداً</div>
+                      </div>
+                      <div class="sol-chip sol-chip-major">
+                        {sol["major"][1]}
+                        <div class="sol-chip-label">نشاط عالي جداً</div>
+                      </div>
+                    </div>
+                    <div class="solunar-col solunar-minor">
+                      <div class="solunar-icon">🌙</div>
+                      <div class="solunar-heading">MINOR TIMES</div>
+                      <div class="sol-chip sol-chip-minor">
+                        {sol["minor"][0]}
+                        <div class="sol-chip-label">نشاط متوسط</div>
+                      </div>
+                      <div class="sol-chip sol-chip-minor">
+                        {sol["minor"][1]}
+                        <div class="sol-chip-label">نشاط متوسط</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div style="text-align:center;font-size:0.72rem;color:#334155;margin-top:4px;">
+                    محسوب بناءً على موقع القمر ونظرية سولونار الفلكية
+                  </div>
+                </div>
+                """, unsafe_allow_html=True)
+            except Exception:
+                pass
+        except Exception:
+            st.error("⚠️ حدث خطأ أثناء معالجة البيانات الهيدرولوجية والجوية.")
