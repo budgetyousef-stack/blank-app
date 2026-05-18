@@ -79,7 +79,7 @@ iframe[title="st_folium.frontend"] { border-radius: 14px !important; border: 1px
 </style>
 """, unsafe_allow_html=True)
 
-# ─── ثوابت ────────────────────────────────────────────────────────────────────
+# ─── ثوابت ودوال مساعدة ───────────────────────────────────────────────────────
 DAYS_AR   = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"]
 MONTHS_AR = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"]
 
@@ -123,7 +123,6 @@ def compute_tide_profile(lat: float, lon: float, for_date: datetime) -> list:
         heights.append(round(max(0.05, level), 2))
     return heights
 
-# خوارزمية حساب الدقائق الدقيقة لأعلى وأدنى جزر
 def find_tide_events(heights: list) -> dict:
     highs, lows = [], []
     for i in range(1, len(heights) - 1):
@@ -134,10 +133,8 @@ def find_tide_events(heights: list) -> dict:
             val = y2 - ((y1 - y3)**2) / (8 * denom)
         else:
             dx, val = 0, y2
-            
         exact_h = i + dx
         val = round(max(0.0, val), 2)
-        
         if y2 >= y1 and y2 >= y3: highs.append((exact_h, val))
         elif y2 <= y1 and y2 <= y3: lows.append((exact_h, val))
     return {"highs": highs, "lows": lows}
@@ -181,6 +178,14 @@ def get_location_name(lat: float, lon: float) -> str:
         return addr.get("city") or addr.get("town") or addr.get("state") or "منطقة بحرية مفتوحة"
     except: return "منطقة بحرية"
 
+# ─── دالة الأمان (Safeguard) لحماية الكود من القيم الفارغة ───────────────────
+def get_safe(lst, idx, default=0.0):
+    try:
+        val = lst[idx]
+        return float(val) if val is not None else default
+    except:
+        return default
+
 # ─── واجهة المستخدم ───────────────────────────────────────────────────────────
 st.markdown('<h1 class="main-title">🌊 MARINE TRACKER</h1>', unsafe_allow_html=True)
 st.markdown('<p class="sub-title">المرشد البحري الذكي لرحلات الصيد</p>', unsafe_allow_html=True)
@@ -206,17 +211,22 @@ if map_data and map_data.get("last_clicked"):
         st.rerun()
 
 w_res, m_res = fetch_weather(flat, flon)
-if w_res and "hourly" in w_res:
+if w_res and "hourly" in w_res and m_res and "hourly" in m_res:
     hw, hm = w_res["hourly"], m_res["hourly"]
     curr_h = datetime.now().hour
-    data_idx = min((day_offset * 24) + curr_h, len(hw["temperature_2m"]) - 1)
+    
+    # تحديد الفهرس بشكل آمن لتفادي أخطاء الأيام البعيدة
+    max_idx = min(len(hw.get("temperature_2m", [])) - 1, len(hm.get("wave_height", [])) - 1)
+    target_idx = (day_offset * 24) + curr_h
+    data_idx = min(target_idx, max_idx) if max_idx >= 0 else 0
 
-    t_now = hw["temperature_2m"][data_idx]
-    wind_now = hw["windspeed_10m"][data_idx]
-    wind_dir = hw["winddirection_10m"][data_idx]
-    wave_now = hm["wave_height"][data_idx]
-    swell_now = hm["swell_wave_height"][data_idx]
-    sst = hm["sea_surface_temperature"][data_idx]
+    # استخدام دالة الأمان بدلاً من الاستدعاء المباشر الذي يسبب المشاكل
+    t_now = get_safe(hw.get("temperature_2m", []), data_idx)
+    wind_now = get_safe(hw.get("windspeed_10m", []), data_idx)
+    wind_dir = get_safe(hw.get("winddirection_10m", []), data_idx)
+    wave_now = get_safe(hm.get("wave_height", []), data_idx)
+    swell_now = get_safe(hm.get("swell_wave_height", []), data_idx)
+    sst = get_safe(hm.get("sea_surface_temperature", []), data_idx)
 
     arrow_style = f"transform: rotate({wind_dir}deg); display: inline-block; font-size: 1.1rem; color: #38BDF8;"
     if wind_now < 14 and wave_now < 0.5: status, badge, adv = "excellent", "badge-excellent", "الوضع ممتاز: بحر هادئ تماماً وحركة مريحة للصيد."
@@ -266,7 +276,7 @@ if w_res and "hourly" in w_res:
     </div>
     """, unsafe_allow_html=True)
 
-    # ─── 📉 منحنى المد والجزر باستخدام ALTAIR المدمجة (منحنى سلس وتنسيق جميل) ───
+    # ─── 📉 منحنى المد والجزر (ALTAIR) ───
     try:
         target_date = datetime.now() + timedelta(days=day_offset)
         tide_heights = compute_tide_profile(flat, flon, target_date)
@@ -278,52 +288,30 @@ if w_res and "hourly" in w_res:
             h12 = h % 12 or 12
             labels_12h.append(f"{h12}:00 {p}")
 
-        tide_df = pd.DataFrame({
-            "hour": list(range(25)),
-            "height": tide_heights,
-            "label": labels_12h
-        })
+        tide_df = pd.DataFrame({"hour": list(range(25)), "height": tide_heights, "label": labels_12h})
 
-        # إعداد مخطط Altair بخط انسيابي ومحور X كل 4 ساعات
         chart = alt.Chart(tide_df).mark_area(
             line={'color': '#38BDF8', 'strokeWidth': 3},
             color=alt.Gradient(
-                gradient='linear',
-                stops=[alt.GradientStop(color='rgba(56,189,248,0.6)', offset=0),
-                       alt.GradientStop(color='rgba(56,189,248,0.0)', offset=1)],
+                gradient='linear', stops=[alt.GradientStop(color='rgba(56,189,248,0.6)', offset=0), alt.GradientStop(color='rgba(56,189,248,0.0)', offset=1)],
                 x1=1, x2=1, y1=0, y2=1
             ),
             interpolate='monotone'
         ).encode(
-            x=alt.X('hour:Q',
-                    axis=alt.Axis(
-                        values=[0, 4, 8, 12, 16, 20, 24],
-                        labelExpr="datum.value == 0 ? '12 ص' : datum.value == 12 ? '12 م' : datum.value == 24 ? '12 ص' : datum.value < 12 ? datum.value + ' ص' : (datum.value - 12) + ' م'",
-                        labelColor="#94A3B8",
-                        gridColor="rgba(255,255,255,0.05)",
-                        title=None,
-                        labelFont="Cairo",
-                        labelFontSize=11
-                    )),
-            y=alt.Y('height:Q',
-                    scale=alt.Scale(domain=[min(tide_heights)-0.2, max(tide_heights)+0.2]),
-                    axis=alt.Axis(
-                        title=None,
-                        labelColor="#94A3B8",
-                        gridColor="rgba(255,255,255,0.05)",
-                        labelFont="Cairo",
-                        format=".1f"
-                    )),
-            tooltip=[
-                alt.Tooltip('label:N', title='الوقت'),
-                alt.Tooltip('height:Q', title='الارتفاع (م)')
-            ]
+            x=alt.X('hour:Q', axis=alt.Axis(
+                values=[0, 4, 8, 12, 16, 20, 24],
+                labelExpr="datum.value == 0 ? '12 ص' : datum.value == 12 ? '12 م' : datum.value == 24 ? '12 ص' : datum.value < 12 ? datum.value + ' ص' : (datum.value - 12) + ' م'",
+                labelColor="#94A3B8", gridColor="rgba(255,255,255,0.05)", title=None, labelFont="Cairo", labelFontSize=11
+            )),
+            y=alt.Y('height:Q', scale=alt.Scale(domain=[min(tide_heights)-0.2, max(tide_heights)+0.2]), axis=alt.Axis(
+                title=None, labelColor="#94A3B8", gridColor="rgba(255,255,255,0.05)", labelFont="Cairo", format=".1f"
+            )),
+            tooltip=[alt.Tooltip('label:N', title='الوقت'), alt.Tooltip('height:Q', title='الارتفاع (م)')]
         ).properties(height=200).configure_view(strokeWidth=0)
 
         st.markdown('<div class="map-section-label" style="margin-top:12px;">📉 حركة المد والجزر السلسة (نظام 12 ساعة)</div>', unsafe_allow_html=True)
         st.altair_chart(chart, use_container_width=True)
 
-        # ─── تنسيق أوقات المد والجزر بالدقائق (احترافي جداً) ───
         st.markdown('<div class="tide-details-box">', unsafe_allow_html=True)
         c_low, c_high = st.columns(2)
         
@@ -331,12 +319,9 @@ if w_res and "hourly" in w_res:
             if h_float < 0: h_float += 24
             h_int = int(h_float) % 24
             m_int = int(round((h_float % 1) * 60))
-            if m_int == 60:
-                h_int = (h_int + 1) % 24
-                m_int = 0
+            if m_int == 60: h_int = (h_int + 1) % 24; m_int = 0
             p = "ص" if h_int < 12 else "م"
-            h12 = h_int % 12 or 12
-            return f"{h12:02d}:{m_int:02d} {p}"
+            return f"{h_int % 12 or 12:02d}:{m_int:02d} {p}"
             
         with c_low:
             st.markdown("<div style='color:#94A3B8; font-size:0.85rem; font-weight:700; margin-bottom:8px;'>🌊 Low Tides (أدنى جزر):</div>", unsafe_allow_html=True)
@@ -377,3 +362,5 @@ if w_res and "hourly" in w_res:
         </div>
         """, unsafe_allow_html=True)
     except Exception: pass
+else:
+    st.error("⚠️ لم نتمكن من جلب بيانات الطقس من السيرفر. يرجى المحاولة لاحقاً.")
