@@ -1112,3 +1112,49 @@ if st.session_state["coords"]:
                   </div>
                 </div>
                 """, unsafe_allow_html=True)
+            except Exception:
+                pass
+
+            # ─── توقعات الأسبوع القادم ─────────────────────────────────────────
+            try:
+                dw  = w_res["daily"].get("windspeed_10m_max", [0]*7)
+                dt  = w_res["daily"].get("temperature_2m_max", [0]*7)
+                dwv = m_res["daily"].get("wave_height_max", [0]*7)
+                dsw = m_res["daily"].get("swell_wave_height_max", [0]*7)
+
+                lbls = [
+                    "اليوم" if i == 0
+                    else DAYS_AR[(datetime.now() + timedelta(days=i)).weekday() % 7]
+                    for i in range(min(7, len(dw)))
+                ]
+
+                chart_data = pd.DataFrame({
+                    "اليوم": lbls,
+                    "الرياح (كم/س)":   [round(v) if v is not None else 0 for v in dw[:len(lbls)]],
+                    "الأمواج (م)":     [round(v, 2) if v is not None else 0 for v in dwv[:len(lbls)]],
+                    "الحرارة (°م)":    [round(v) if v is not None else 0 for v in dt[:len(lbls)]],
+                    "التورم البحري (م)":[round(v, 2) if v is not None else 0 for v in dsw[:len(lbls)]],
+                }).set_index("اليوم")
+
+                st.markdown(
+                    '<div class="map-section-label" style="margin-top:4px;">📈 توقعات الأسبوع القادم</div>',
+                    unsafe_allow_html=True
+                )
+                st.line_chart(
+                    chart_data,
+                    height=220,
+                    use_container_width=True,
+                    color=["#38BDF8", "#10B981", "#F59E0B", "#A78BFA"]
+                )
+            except Exception:
+                pass
+
+        except Exception as e:
+            st.error(f"⚠️ يرجى اختيار نقطة داخل البحر لتشغيل التحليلات.")
+
+# ─── الفوتر ───────────────────────────────────────────────────────────────────
+st.markdown("""
+<div class="footer">
+  Marine Tracker PRO • بيانات Open-Meteo • الخرائط OpenStreetMap
+</div>
+""", unsafe_allow_html=True)
