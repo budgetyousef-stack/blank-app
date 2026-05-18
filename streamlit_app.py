@@ -322,7 +322,7 @@ def fish_activity_score(wind: float, wave: float, temp: float, swell: float = 0.
         "temp_status": t_status, "temp_label": t_label,
     }
 
-# ─── تجميع ساعات جيدة متتالية في نطاقات زمنية ────────────────────────────────
+# ─── تجميع الساعات وإصلاح نظام الـ 24 ساعة المتقدم ────────────────────────────
 def build_time_ranges(good_hours: list) -> list:
     if not good_hours:
         return []
@@ -339,10 +339,14 @@ def build_time_ranges(good_hours: list) -> list:
 
     chips = []
     for s, e in ranges:
+        # إصلاح جذري: فك تركيب الساعة والـ AM/PM لما يتعدى اليوم الحالي
         def fmt(h):
-            period = "ص" if h < 12 else "م"
-            h12 = h % 12 or 12
-            return f"{h12}:00 {period}"
+            h_wrapped = h % 24
+            period = "ص" if h_wrapped < 12 else "م"
+            h12 = h_wrapped % 12 or 12
+            day_label = " (غداً)" if h >= 24 else ""
+            return f"{h12}:00 {period}{day_label}"
+        
         if s == e:
             chips.append(fmt(s))
         else:
@@ -351,15 +355,15 @@ def build_time_ranges(good_hours: list) -> list:
 
 # ─── نموذج المد والجزر التوافقي (Harmonic Tidal Model) ───────────────────────
 def _tide_amplitudes(lat: float, lon: float) -> dict:
-    in_gulf     = (23 <= lat <= 30) and (48 <= lon <= 57)   # Arabian Gulf
-    in_red_sea  = (12 <= lat <= 28) and (32 <= lon <= 44)   # Red Sea
-    in_oman     = (22 <= lat <= 26) and (57 <= lon <= 62)   # Gulf of Oman
+    结构_gulf     = (23 <= lat <= 30) and (48 <= lon <= 57)
+    结构_red_sea  = (12 <= lat <= 28) and (32 <= lon <= 44)
+    结构_oman     = (22 <= lat <= 26) and (57 <= lon <= 62)
 
-    if in_gulf:
+    if 结构_gulf:
         return dict(M2=0.90, S2=0.28, K1=0.12, O1=0.08, M4=0.06, base=1.10)
-    elif in_red_sea:
+    elif 结构_red_sea:
         return dict(M2=0.28, S2=0.10, K1=0.18, O1=0.12, M4=0.02, base=0.45)
-    elif in_oman:
+    elif 结构_oman:
         return dict(M2=0.65, S2=0.22, K1=0.20, O1=0.14, M4=0.04, base=0.80)
     else:
         return dict(M2=0.60, S2=0.20, K1=0.18, O1=0.12, M4=0.03, base=0.75)
@@ -573,7 +577,7 @@ m = folium.Map(
     prefer_canvas=True,
 )
 
-# حقن CSS لإلغاء انعكاس الخريطة والمحافظة على الـ LTR فيها
+# حقن CSS لمنع انعكاس الخريطة والمحافظة على الـ LTR فيها
 m.get_root().html.add_child(folium.Element("""
 <style>
 html, body,
@@ -652,7 +656,7 @@ if st.session_state["coords"]:
             sst         = safe_get(hm.get("sea_surface_temperature", []), curr_h)
             precip_prob = safe_get(hw.get("precipitation_probability", []), curr_h)
 
-            # تعديل: مسح الـ 24 ساعة بالكامل لصيد الفترتين الجيدتين للصيد
+            # مسح الـ 24 ساعة بالكامل لصيد الفترتين الجيدتين للصيد
             look_ahead = min(curr_h + 24, total_hours)
             good_hours = [
                 i for i in range(curr_h, look_ahead)
@@ -693,7 +697,7 @@ if st.session_state["coords"]:
                 </div>
                 <div class="metric-box">
                   <div class="metric-value">{wind_now:.0f} كم/س</div>
-                  <div class="metric-label">الرياح</div>
+                  <div class="metric-label"> الرياح</div>
                 </div>
                 <div class="metric-box">
                   <div class="metric-value">{wind_gust:.0f} كم/س</div>
@@ -719,27 +723,24 @@ if st.session_state["coords"]:
                 </div>
               </div>
               <p class="advice-{status}">{adv}</p>
+            </div>
             """, unsafe_allow_html=True)
 
+            # عرض النطاقات الزمنية المعدلة بشكل نظيف ومستقل تحت بطاقة الأحوال
             if time_ranges:
                 chips_html = "".join(f'<span class="range-chip">{r}</span>' for r in time_ranges[:4])
                 st.markdown(f"""
-                <div style="border-top:1px solid #1E3A5F;padding-top:12px;margin-top:4px;">
-                  <div style="color:#94A3B8;font-size:0.82rem;text-align:right;margin-bottom:6px;">
-                    🕐 أفضل نطاقات الصيد القادمة:
-                  </div>
-                  <div style="direction:rtl;">{chips_html}</div>
+                <div style="margin-top:-8px; margin-bottom:16px; direction:rtl; text-align:right;">
+                  <span style="color:#94A3B8; font-size:0.85rem; margin-left:8px;"> Veron 🕐 أفضل فترات الصيد القادمة خلال اليوم:</span>
+                  {chips_html}
                 </div>
                 """, unsafe_allow_html=True)
             else:
                 st.markdown("""
-                <div style="border-top:1px solid #1E3A5F;padding-top:12px;margin-top:4px;
-                            color:#EF4444;font-size:0.84rem;text-align:right;">
-                  ⚠️ لا توجد ساعات مناسبة للصيد خلال الفترة القادمة.
+                <div style="margin-top:-8px; margin-bottom:16px; color:#EF4444; font-size:0.85rem; text-align:right;">
+                  ⚠️ لا توجد فترات مناسبة للصيد خلال الـ 24 ساعة القادمة.
                 </div>
                 """, unsafe_allow_html=True)
-
-            st.markdown('</div>', unsafe_allow_html=True)
 
             # ─── بطاقة مؤشر نشاط الأسماك ─────────────────────────────────────
             act = fish_activity_score(wind_now, wave_now, t_now, swell_now)
@@ -784,13 +785,12 @@ if st.session_state["coords"]:
             </div>
             """, unsafe_allow_html=True)
 
-            # ─── معالجة الحسابات للمنحنى (مع حذف عرض الأكواد الخربانة) ───
+            # ─── معالجة الحسابات للمنحنى البياني ───
             try:
                 now = datetime.now()
                 tide_heights = compute_tide_profile(flat, flon, now)
                 curr_tide_h  = min(curr_h, 24)
 
-                # إنشاء مخطط منحنى المد خلال 24 ساعة
                 tide_chart_data = pd.DataFrame(
                     {"المد (م)": [float(v) for v in tide_heights]},
                     index=list(range(25)),
