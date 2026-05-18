@@ -965,43 +965,6 @@ if st.session_state["coords"]:
                 high_chips = build_event_chips(tide_events["highs"], True)
                 low_chips  = build_event_chips(tide_events["lows"],  False)
 
-                st.markdown(f"""
-                <div class="card">
-                  <div class="card-title">🌊 حالة المد والجزر</div>
-                  <div class="tide-row">
-
-                    <!-- مقياس المنسوب المرئي -->
-                    <div class="tide-gauge-wrap">
-                      <div class="tide-gauge-tube">
-                        <div class="tide-gauge-fill"
-                             style="height:{fill_pct}%;background:{gauge_grad};">
-                        </div>
-                      </div>
-                      <div class="tide-gauge-value">{curr_level:.2f}</div>
-                      <div class="tide-gauge-label">متر</div>
-                    </div>
-
-                    <!-- معلومات الاتجاه والأحداث -->
-                    <div class="tide-info-wrap">
-                      <div class="tide-status-banner">
-                        <div class="tide-status-text">
-                          <div class="tide-status-title"
-                               style="color:{tide_color};">{tide_status}</div>
-                          <div class="tide-status-sub">{tide_sub}</div>
-                        </div>
-                        <div class="tide-direction" style="color:{tide_color};">
-                          {tide_arrow}
-                        </div>
-                      </div>
-                      <div class="tide-events-row">
-                        {high_chips}{low_chips}
-                      </div>
-                    </div>
-
-                  </div>
-                </div>
-                """, unsafe_allow_html=True)
-
                 # مخطط منحنى المد خلال 24 ساعة — سلسلة واحدة نظيفة
                 tide_chart_data = pd.DataFrame(
                     {"المد (م)": [float(v) for v in tide_heights]},
