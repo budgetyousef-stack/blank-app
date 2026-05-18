@@ -12,15 +12,21 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+# تنسيق الواجهة وحل مشكلة اتجاه الخريطة
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght=400;600;700;800&display=swap');
 
     html, body, [class*="css"] {
         font-family: 'Cairo', sans-serif !important;
         direction: rtl;
     }
     .stApp { background-color: #0F172A; }
+
+    /* حماية الخريطة من الانعكاس بسبب اللغة العربية */
+    .stFoliumMap, .stFoliumMap iframe, div[data-testid="stMarkdownContainer"] iframe {
+        direction: ltr !important;
+    }
 
     /* Header */
     .main-title {
@@ -63,10 +69,11 @@ st.markdown("""
         font-weight: 700;
         margin-bottom: 16px;
         font-family: 'Cairo', sans-serif;
+        text-align: right;
     }
 
     /* Metric boxes */
-    .metric-row { display: flex; gap: 12px; margin-bottom: 16px; }
+    .metric-row { display: flex; gap: 12px; margin-bottom: 16px; direction: rtl; }
     .metric-box {
         flex: 1;
         background: rgba(255,255,255,0.04);
@@ -86,7 +93,7 @@ st.markdown("""
     /* Activity level bar */
     .activity-bar-wrap { background: #0F172A; border-radius: 8px; height: 14px; overflow: hidden; margin: 8px 0 4px 0; }
     .activity-bar-fill { height: 100%; border-radius: 8px; transition: width 0.6s; }
-    .activity-labels { display: flex; justify-content: space-between; font-size: 0.72rem; color: #64748B; }
+    .activity-labels { display: flex; justify-content: space-between; font-size: 0.72rem; color: #64748B; direction: rtl; }
 
     /* Best hours chips */
     .hour-chip {
@@ -97,16 +104,16 @@ st.markdown("""
         font-size: 0.8rem;
         padding: 4px 12px;
         border-radius: 20px;
-        margin: 3px 4px 3px 0;
+        margin: 3px 0 3px 4px;
     }
 
     /* Advice text */
-    .advice-excellent { color: #10B981; font-weight: 600; font-size: 0.97rem; line-height: 1.8; font-family: 'Cairo', sans-serif; }
-    .advice-good      { color: #F59E0B; font-weight: 600; font-size: 0.97rem; line-height: 1.8; font-family: 'Cairo', sans-serif; }
-    .advice-bad       { color: #EF4444; font-weight: 600; font-size: 0.97rem; line-height: 1.8; font-family: 'Cairo', sans-serif; }
+    .advice-excellent { color: #10B981; font-weight: 600; font-size: 0.97rem; line-height: 1.8; font-family: 'Cairo', sans-serif; text-align: right; }
+    .advice-good      { color: #F59E0B; font-weight: 600; font-size: 0.97rem; line-height: 1.8; font-family: 'Cairo', sans-serif; text-align: right; }
+    .advice-bad       { color: #EF4444; font-weight: 600; font-size: 0.97rem; line-height: 1.8; font-family: 'Cairo', sans-serif; text-align: right; }
 
     /* Factor boxes */
-    .factor-row { display: flex; gap: 10px; margin-top: 14px; }
+    .factor-row { display: flex; gap: 10px; margin-top: 14px; direction: rtl; }
     .factor-box {
         flex: 1;
         background: rgba(255,255,255,0.03);
@@ -117,7 +124,7 @@ st.markdown("""
     .factor-label { font-size: 0.7rem; color: #64748B; margin-top: 4px; }
 
     /* Day cards in forecast */
-    .day-cards { display: flex; gap: 8px; margin-top: 14px; }
+    .day-cards { display: flex; gap: 8px; margin-top: 14px; direction: rtl; }
     .day-card {
         flex: 1;
         background: rgba(255,255,255,0.03);
@@ -243,11 +250,10 @@ with col_left:
     st.markdown('<div class="card-title">🗺️ خريطة الصيد التفاعلية</div>', unsafe_allow_html=True)
     st.info("💡 كبّر الخريطة واضغط على أي مكان في البحر لوضع الدبوس والمربع الشفاف وتحليله فوراً.")
     
-    # تحديد مركز الخريطة الأولي عند تفاعل المستخدم
+    # تحديد مركز الخريطة الأولي
     init_lat = MAP_START_LAT
     init_lon = MAP_START_LON
     
-    # قراءة النقرة الأولى إن وجدت لتثبيت الدبوس في مكانه
     if st.session_state.get("clicked_coordinates"):
         init_lat, init_lon = st.session_state["clicked_coordinates"]
 
@@ -259,7 +265,7 @@ with col_left:
     )
     m.add_child(folium.LatLngPopup())
     
-    # رسم الدبوس والمربع الشفاف إذا كانت الإحداثية مخزنة
+    # رسم الدبوس والمربع عند النقر الثابت
     if st.session_state.get("clicked_coordinates"):
         clat, clon = st.session_state["clicked_coordinates"]
         folium.Marker(
@@ -277,9 +283,9 @@ with col_left:
             weight=2
         ).add_to(m)
     
+    # استدعاء الخريطة مع إلغاء تأثير الـ RTL عليها داخلياً
     map_data = st_folium(m, height=450, use_container_width=True, key="marine_map")
     
-    # حفظ الإحداثيات عند النقر لمنع أخطاء التحديث المستمر
     if map_data and map_data.get("last_clicked"):
         new_lat = map_data["last_clicked"]["lat"]
         new_lon = map_data["last_clicked"]["lng"]
@@ -339,7 +345,7 @@ with col_right:
                 unsafe_allow_html=True
             )
             st.markdown(
-                f'<div style="color:#64748B; font-size:0.85rem; margin-top:-10px; margin-bottom:14px;">'
+                f'<div style="color:#64748B; font-size:0.85rem; margin-top:-10px; margin-bottom:14px; text-align:right;">'
                 f'Lat: {clicked_lat:.4f} | Lon: {clicked_lon:.4f}</div>',
                 unsafe_allow_html=True
             )
@@ -363,7 +369,7 @@ with col_right:
                 chips = "".join(f'<span class="hour-chip">{h}</span>' for h in best_hours)
                 st.markdown(
                     f'<div style="border-top:1px solid #334155;padding-top:12px;margin-top:8px">'
-                    f'<div style="color:#94A3B8;font-size:0.82rem;margin-bottom:6px">أفضل ساعات الصيد اليوم في هذا الموقع:</div>'
+                    f'<div style="color:#94A3B8;font-size:0.82rem;margin-bottom:6px;text-align:right;">أفضل ساعات الصيد اليوم في هذا الموقع:</div>'
                     f'{chips}</div>',
                     unsafe_allow_html=True
                 )
@@ -392,7 +398,7 @@ with col_right:
             )
             st.markdown(
                 f'<div style="background:rgba(255,255,255,0.03);border-radius:10px;padding:12px;'
-                f'font-size:0.92rem;color:#CBD5E1;line-height:1.8;font-family:Cairo,sans-serif;">'
+                f'font-size:0.92rem;color:#CBD5E1;line-height:1.8;font-family:Cairo,sans-serif;text-align:right;">'
                 f'{act["advice"]}</div>',
                 unsafe_allow_html=True
             )
