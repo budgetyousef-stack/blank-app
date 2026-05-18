@@ -10,10 +10,10 @@ import time
 from streamlit_folium import st_folium
 from datetime import datetime, timedelta
 
-# ─── إعدادات الصفحة ───────────────────────────────────────────────────────────
+# ─── إعدادات الصفحة والهوية الجديدة ───────────────────────────────────────────
 st.set_page_config(
-    page_title="Marine Tracker PRO",
-    page_icon="🌊",
+    page_title="Marso | مَارسُو",
+    page_icon="⚓",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
@@ -21,7 +21,7 @@ st.set_page_config(
 # ─── CSS احترافي متجاوب ───────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght=400;600;700;800;900&display=swap');
 
 *, html, body { box-sizing: border-box; }
 html, body, [class*="css"], .stApp, .block-container {
@@ -71,11 +71,15 @@ iframe[title="st_folium.frontend"] { border-radius: 14px !important; border: 1px
 
 .cache-status-badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 0.75rem; font-weight: 800; margin-bottom: 12px; background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.2); color: #38BDF8; }
 
+.main-title { color: #38BDF8; text-align: center; font-size: clamp(1.8rem, 5vw, 2.6rem); font-weight: 900; margin: 0; letter-spacing: -0.5px; text-shadow: 0 0 40px rgba(56,189,248,0.3); }
+.sub-title { color: #64748B; text-align: center; font-size: clamp(0.85rem, 2.5vw, 1rem); font-weight: 600; margin-top: 6px; }
+.divider { width: 50px; height: 4px; background: linear-gradient(90deg, #38BDF8, #0EA5E9); border-radius: 4px; margin: 12px auto 20px auto; }
+
 @media (max-width: 480px) { .block-container { padding: 0.6rem 0.6rem 2rem 0.6rem !important; } .card { padding: 14px 12px; border-radius: 14px; } .metric-row { gap: 6px; } }
 </style>
 """, unsafe_allow_html=True)
 
-# ─── ثوابت ودوال ──────────────────────────────────────────────────────────────
+# ─── ثوابت ────────────────────────────────────────────────────────────────────
 DAYS_AR   = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"]
 MONTHS_AR = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"]
 
@@ -165,7 +169,7 @@ def fetch_weather_live(lat: float, lon: float):
         return None, None
 
 def get_cached_marine_data(lat: float, lon: float):
-    cache_file = "marine_data_cache.json"
+    cache_file = "marso_data_cache.json" # تم تعديل اسم ملف الكاش المكتوب محلياً
     current_time = time.time()
     one_week_seconds = 7 * 24 * 3600
     loc_key = f"{round(lat, 2)},{round(lon, 2)}"
@@ -194,7 +198,7 @@ def get_cached_marine_data(lat: float, lon: float):
 @st.cache_data(ttl=86400)
 def get_location_name(lat: float, lon: float) -> str:
     try:
-        res = requests.get(f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json&accept-language=ar", headers={"User-Agent": "MarineTrackerPRO/2.0"}).json()
+        res = requests.get(f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json&accept-language=ar", headers={"User-Agent": "MarsoApp/3.0"}).json()
         addr = res.get("address", {})
         return addr.get("city") or addr.get("town") or addr.get("state") or "منطقة بحرية مفتوحة"
     except: return "منطقة بحرية"
@@ -211,9 +215,10 @@ def fmt_exact_time(h_float):
     p = "ص" if h_int < 12 else "م"
     return f"{h_int % 12 or 12:02d}:{m_int:02d} {p}"
 
-# ─── واجهة المستخدم ───────────────────────────────────────────────────────────
-st.markdown('<h1 class="main-title">🌊 MARINE TRACKER</h1>', unsafe_allow_html=True)
+# ─── واجهة المستخدم الهوية الجديدة ────────────────────────────────────────────
+st.markdown('<h1 class="main-title">⚓ MARSO</h1>', unsafe_allow_html=True)
 st.markdown('<p class="sub-title">المرشد البحري الذكي لرحلات الصيد</p>', unsafe_allow_html=True)
+st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
 
 if "coords" not in st.session_state: st.session_state["coords"] = (26.9239, 49.8681)
 
@@ -295,7 +300,7 @@ if w_res and m_res:
     </div>
     """, unsafe_allow_html=True)
 
-    # ─── 📈 منحنى كفاءة الصيد الساعي (أنحف وأرتب) ───
+    # ─── 📈 منحنى كفاءة الصيد الساعي ───
     try:
         hourly_fish = []
         labels_12h_fish = []
@@ -355,8 +360,7 @@ if w_res and m_res:
 
     except Exception: pass
 
-
-    # ─── 📉 منحنى المد والجزر (أنحف وأرتب) ───
+    # ─── 📉 منحنى المد والجزر ───
     try:
         target_date = datetime.now() + timedelta(days=day_offset)
         tide_heights = compute_tide_profile(flat, flon, target_date)
