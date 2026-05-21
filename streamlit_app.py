@@ -24,7 +24,8 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap');
 
 *, html, body { box-sizing: border-box; }
-html, body, [class*="css"], .stApp, .block-container {
+/* تم إزالة بعض الكلاسات التي كانت تكسر تصميم Streamlit الأساسي */
+html, body, .stApp, .block-container {
     font-family: 'Cairo', sans-serif !important;
     direction: rtl !important;
 }
@@ -210,15 +211,6 @@ def fmt_exact_time(h_float):
     p = "ص" if h_int < 12 else "م"
     return f"{h_int % 12 or 12:02d}:{m_int:02d} {p}"
 
-# ─── القائمة الجانبية (الإعدادات) ──────────────────────────────────────────────
-with st.sidebar:
-    st.markdown("### ⚙️ الإعدادات المتقدمة")
-    if st.button("🔄 تحديث بيانات الطقس الآن", use_container_width=True):
-        if os.path.exists("marso_data_cache.json"):
-            os.remove("marso_data_cache.json")
-        st.cache_data.clear()
-        st.rerun()
-
 # ─── واجهة المستخدم النظيفة ──────────────────────────────────────────────────
 col_logo1, col_logo2, col_logo3 = st.columns([1, 1.8, 1])
 with col_logo2:
@@ -362,10 +354,11 @@ if w_res and m_res:
             tooltip=[alt.Tooltip('label:N', title='الوقت'), alt.Tooltip('score:Q', title='النشاط (%)')]
         ).properties(height=140).configure_view(strokeWidth=0)
 
-        # إضافة خط الوقت الحالي
+        # إصلاح خط الوقت الحالي
         if day_offset == 0:
-            current_hour_df = pd.DataFrame({"hour": [datetime.now().hour + datetime.now().minute / 60.0]})
-            rule = alt.Chart(current_hour_df).mark_rule(color='#EF4444', strokeWidth=2, strokeDash=[4, 4]).encode(x='hour:Q', tooltip=alt.value('الوقت الحالي'))
+            current_hour_val = datetime.now().hour + (datetime.now().minute / 60.0)
+            rule_df = pd.DataFrame({"hour": [current_hour_val]})
+            rule = alt.Chart(rule_df).mark_rule(color='#EF4444', strokeWidth=2, strokeDash=[4, 4]).encode(x='hour:Q')
             fish_chart = fish_chart + rule
 
         st.markdown('<div class="map-section-label" style="margin-top:12px;">📈 كفاءة الصيد الساعي (على مدار اليوم)</div>', unsafe_allow_html=True)
@@ -470,5 +463,15 @@ if w_res and m_res:
         </div>
         """, unsafe_allow_html=True)
     except Exception: pass
+    
+    # ─── الإعدادات السفلية (بديل القائمة الجانبية) ───
+    st.markdown("<br><hr style='border-color: #1E3A5F;'>", unsafe_allow_html=True)
+    with st.expander("⚙️ إعدادات التطبيق وتحديث البيانات"):
+        if st.button("🔄 تحديث بيانات الطقس الآن", use_container_width=True):
+            if os.path.exists("marso_data_cache.json"):
+                os.remove("marso_data_cache.json")
+            st.cache_data.clear()
+            st.rerun()
+
 else:
     st.error("⚠️ لم نتمكن من جلب بيانات الطقس من السيرفر. يرجى المحاولة لاحقاً.")
