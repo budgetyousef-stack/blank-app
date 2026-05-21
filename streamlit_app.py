@@ -69,8 +69,6 @@ iframe[title="st_folium.frontend"] { border-radius: 14px !important; border: 1px
 .sol-chip-label { font-size: 0.65rem; color: #64748B; margin-top: 3px; }
 .tide-details-box { background: rgba(30,41,59,0.4); border: 1px solid rgba(255,255,255,0.05); padding: 14px; border-radius: 14px; margin-top: -10px; margin-bottom: 16px; }
 
-.cache-status-badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 0.75rem; font-weight: 800; margin-bottom: 12px; background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.2); color: #38BDF8; }
-
 .main-title { color: #38BDF8; text-align: center; font-size: clamp(2rem, 6vw, 3rem); font-weight: 900; margin: 10px 0 0 0; letter-spacing: -0.5px; text-shadow: 0 0 40px rgba(56,189,248,0.3); }
 .divider { width: 60px; height: 4px; background: linear-gradient(90deg, #38BDF8, #0EA5E9); border-radius: 4px; margin: 16px auto 24px auto; }
 </style>
@@ -127,7 +125,6 @@ def find_tide_events(heights: list) -> dict:
         else: dx, val = 0, y2
         exact_h = i + dx
         val = round(max(0.0, val), 2)
-        # ─── تم تعديل وإضافة المسافة البرمجية هنا بنجاح لإنهاء الخطأ ───
         if y2 >= y1 and y2 >= y3: highs.append((exact_h, val))
         elif y2 <= y1 and y2 <= y3: lows.append((exact_h, val))
     return {"highs": highs, "lows": lows}
@@ -213,6 +210,15 @@ def fmt_exact_time(h_float):
     p = "ص" if h_int < 12 else "م"
     return f"{h_int % 12 or 12:02d}:{m_int:02d} {p}"
 
+# ─── القائمة الجانبية (الإعدادات) ──────────────────────────────────────────────
+with st.sidebar:
+    st.markdown("### ⚙️ الإعدادات المتقدمة")
+    if st.button("🔄 تحديث بيانات الطقس الآن", use_container_width=True):
+        if os.path.exists("marso_data_cache.json"):
+            os.remove("marso_data_cache.json")
+        st.cache_data.clear()
+        st.rerun()
+
 # ─── واجهة المستخدم النظيفة ──────────────────────────────────────────────────
 col_logo1, col_logo2, col_logo3 = st.columns([1, 1.8, 1])
 with col_logo2:
@@ -227,6 +233,20 @@ if "coords" not in st.session_state: st.session_state["coords"] = (26.9239, 49.8
 
 flat, flon = st.session_state["coords"]
 st.markdown(f'<div class="location-box">📍 الموقع الحالي: {get_location_name(flat, flon)} ({flat:.3f}°، {flon:.3f}°)</div>', unsafe_allow_html=True)
+
+# ─── مواقع الصيد السريعة ───
+st.markdown('<div class="map-section-label" style="text-align: center;">🎯 مواقع الصيد المفضلة</div>', unsafe_allow_html=True)
+col_loc1, col_loc2, col_loc3 = st.columns(3)
+if col_loc1.button("العقير", use_container_width=True):
+    st.session_state["coords"] = (25.6416, 50.2185)
+    st.rerun()
+if col_loc2.button("الحمراء (الجبيل)", use_container_width=True):
+    st.session_state["coords"] = (27.0500, 49.5450)
+    st.rerun()
+if col_loc3.button("زبنة", use_container_width=True):
+    st.session_state["coords"] = (26.6500, 50.0500)
+    st.rerun()
+st.markdown("<br>", unsafe_allow_html=True)
 
 _day_options = [_day_option_label(i) for i in range(7)]
 _selected_day = st.segmented_control(label="اختر اليوم", options=_day_options, default=_day_options[0], label_visibility="collapsed")
@@ -342,6 +362,12 @@ if w_res and m_res:
             tooltip=[alt.Tooltip('label:N', title='الوقت'), alt.Tooltip('score:Q', title='النشاط (%)')]
         ).properties(height=140).configure_view(strokeWidth=0)
 
+        # إضافة خط الوقت الحالي
+        if day_offset == 0:
+            current_hour_df = pd.DataFrame({"hour": [datetime.now().hour + datetime.now().minute / 60.0]})
+            rule = alt.Chart(current_hour_df).mark_rule(color='#EF4444', strokeWidth=2, strokeDash=[4, 4]).encode(x='hour:Q', tooltip=alt.value('الوقت الحالي'))
+            fish_chart = fish_chart + rule
+
         st.markdown('<div class="map-section-label" style="margin-top:12px;">📈 كفاءة الصيد الساعي (على مدار اليوم)</div>', unsafe_allow_html=True)
         st.altair_chart(fish_chart, use_container_width=True)
 
@@ -394,6 +420,10 @@ if w_res and m_res:
             )),
             tooltip=[alt.Tooltip('label:N', title='الوقت'), alt.Tooltip('height:Q', title='الارتفاع (م)')]
         ).properties(height=140).configure_view(strokeWidth=0)
+        
+        # إضافة خط الوقت الحالي
+        if day_offset == 0:
+            chart = chart + rule
 
         st.markdown('<div class="map-section-label" style="margin-top:12px;">📉 حركة المد والجزر السلسة (على مدار اليوم)</div>', unsafe_allow_html=True)
         st.altair_chart(chart, use_container_width=True)
